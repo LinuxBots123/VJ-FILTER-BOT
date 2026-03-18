@@ -78,40 +78,51 @@ def is_file_already_saved(file_id, file_name):
             
     return False
 
+
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
     """For given query return (results, next_offset)"""
-    
+
     query = query.strip()
-    if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
-    else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]') 
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
-        regex = query
-    filter = {'file_name': regex}
+
+    # FAST SEARCH USING MONGODB TEXT INDEX
+    filter_query = {"$text": {"$search": query}}
+
     files = []
+
     if MULTIPLE_DATABASE:
-        cursor1 = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
-        cursor2 = sec_col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
-        
+
+        cursor1 = col.find(
+            filter_query,
+            {"score": {"$meta": "textScore"}}
+        ).sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
+
+        cursor2 = sec_col.find(
+            filter_query,
+            {"score": {"$meta": "textScore"}}
+        ).sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
+
         for file in cursor1:
             files.append(file)
+
         for file in cursor2:
             files.append(file)
+
     else:
-        cursor = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
-        
+
+        cursor = col.find(
+            filter_query,
+            {"score": {"$meta": "textScore"}}
+        ).sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
+
         for file in cursor:
             files.append(file)
 
-    total_results = col.count_documents(filter) if not MULTIPLE_DATABASE else (col.count_documents(filter) + sec_col.count_documents(filter))
+    total_results = col.count_documents(filter_query) if not MULTIPLE_DATABASE else (col.count_documents(filter_query) + sec_col.count_documents(filter_query))
+
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
 
     return files, next_offset, total_results
+
 
 async def get_bad_files(query, file_type=None, use_filter=False):
     """For given query return (results, next_offset)"""
@@ -145,8 +156,10 @@ async def get_bad_files(query, file_type=None, use_filter=False):
 
     return files, total_results
 
+
 async def get_file_details(query):
     return col.find_one({'file_id': query}) or sec_col.find_one({'file_id': query})
+
 
 def encode_file_id(s: bytes) -> str:
     r = b""
@@ -161,6 +174,7 @@ def encode_file_id(s: bytes) -> str:
             r += bytes([i])
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
     
+
 def unpack_new_file_id(new_file_id):
     """Return file_id"""
     decoded = FileId.decode(new_file_id)
@@ -174,5 +188,3 @@ def unpack_new_file_id(new_file_id):
         )
     )
     return file_id
-    
-
