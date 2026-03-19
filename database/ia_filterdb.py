@@ -7,19 +7,15 @@ from struct import pack
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
-from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
+from info import FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_B_TN
 
 # DB CONNECTION
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
-sec_client = MongoClient(SEC_FILE_DB_URI)
-sec_db = sec_client[DATABASE_NAME]
-sec_col = sec_db[COLLECTION_NAME]
 
-
-# SAVE FILE
+# ✅ SAVE FILE
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
@@ -36,21 +32,13 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
+        print(f"{file_name} saved.")
         return True, 1
     except DuplicateKeyError:
         return False, 0
-    except:
-        if MULTIPLE_DATABASE:
-            try:
-                sec_col.insert_one(file)
-                return True, 1
-            except DuplicateKeyError:
-                return False, 0
-        else:
-            print("Database Full!")
 
 
-# CLEAN NAME
+# ✅ CLEAN FILE NAME
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
     unwanted = ['[', ']', '(', ')', '{', '}']
@@ -62,18 +50,17 @@ def clean_file_name(file_name):
     )
 
 
-# DUPLICATE CHECK
+# ✅ CHECK DUPLICATE
 def is_file_already_saved(file_id, file_name):
-    for collection in [col, sec_col]:
-        if collection.find_one({'file_id': file_id}) or collection.find_one({'file_name': file_name}):
-            return True
+    if col.find_one({'file_id': file_id}) or col.find_one({'file_name': file_name}):
+        return True
     return False
 
 
-# 🔥🔥🔥 FINAL PRODUCTION SEARCH FUNCTION
+# 🔥🔥🔥 FINAL FIXED SEARCH (SINGLE DB, SCALABLE)
 async def get_search_results(*args, file_type=None, max_results=10, offset=0, filter=False):
 
-    # HANDLE BOTH CALLS
+    # SUPPORT BOTH CALL TYPES
     if len(args) == 2:
         chat_id, query = args
     else:
@@ -95,52 +82,18 @@ async def get_search_results(*args, file_type=None, max_results=10, offset=0, fi
         }
 
     # ✅ TOTAL COUNT
-    if MULTIPLE_DATABASE:
-        total = col.count_documents(filter_query) + sec_col.count_documents(filter_query)
-    else:
-        total = col.count_documents(filter_query)
+    total = col.count_documents(filter_query)
 
-    # 🔥 FETCH EXTRA (IMPORTANT FOR MERGE)
-    fetch_limit = offset + max_results + 20
-
-    if MULTIPLE_DATABASE:
-        files1 = list(
-            col.find(filter_query)
-            .sort("_id", -1)
-            .limit(fetch_limit)
-        )
-
-        files2 = list(
-            sec_col.find(filter_query)
-            .sort("_id", -1)
-            .limit(fetch_limit)
-        )
-
-        merged = files1 + files2
-
-        # 🔥 CORRECT SORT (TIME BASED)
-        merged = sorted(
-            merged,
-            key=lambda x: x["_id"].generation_time,
-            reverse=True
-        )
-
-    else:
-        merged = list(
-            col.find(filter_query)
-            .sort("_id", -1)
-            .limit(fetch_limit)
-        )
-
-    # ✅ PAGINATION AFTER MERGE
-    files = merged[offset: offset + max_results]
+    # ✅ PROPER PAGINATION (NO DATA LOSS)
+    cursor = col.find(filter_query).sort("_id", -1).skip(offset).limit(max_results)
+    files = list(cursor)
 
     next_offset = "" if (offset + max_results) >= total else (offset + max_results)
 
     return files, next_offset, total
 
 
-# APPROVE SYSTEM
+# ✅ REQUIRED FOR APPROVE
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = str(query).strip()
@@ -154,10 +107,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             "$options": "i"
         }
 
-    if MULTIPLE_DATABASE:
-        files = list(col.find(filter_query)) + list(sec_col.find(filter_query))
-    else:
-        files = list(col.find(filter_query))
+    files = list(col.find(filter_query))
 
     # REMOVE DUPLICATES
     seen = set()
@@ -173,15 +123,12 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     return unique, len(unique)
 
 
-# FILE DETAILS
+# ✅ GET FILE DETAILS
 async def get_file_details(query):
-    result = col.find_one({'file_id': query})
-    if not result and MULTIPLE_DATABASE:
-        result = sec_col.find_one({'file_id': query})
-    return result
+    return col.find_one({'file_id': query})
 
 
-# ENCODE
+# ✅ ENCODE FILE ID
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -196,7 +143,7 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
-# DECODE
+# ✅ DECODE FILE ID
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     return encode_file_id(
