@@ -27,7 +27,13 @@ async def inline_users(query: InlineQuery):
 @Client.on_inline_query()
 async def answer(bot, query):
     """Show search results for given inline query"""
+    
+    # Get chat_id for the user - if no active connection, use None (will search all files)
     chat_id = await active_connection(str(query.from_user.id))
+    
+    # If no active connection, set to None to search all files
+    if not chat_id:
+        chat_id = None
     
     if not await inline_users(query):
         await query.answer(
@@ -56,22 +62,35 @@ async def answer(bot, query):
         string = query.query.strip()
         file_type = None
 
+    # If string is empty, show recent files
+    if not string:
+        string = ""
+
     offset = int(query.offset or 0)
     reply_markup = get_reply_markup(query=string)
+    
+    # Get search results - if chat_id is None, it will search all files
     files, next_offset, total = await get_search_results(chat_id, string, file_type=file_type, max_results=10, offset=offset)
 
     for file in files:
-        title=file['file_name']
-        size=get_size(file['file_size'])
-        f_caption=file['caption']
+        title = file['file_name']
+        size = get_size(file['file_size'])
+        f_caption = file['caption']
+        
         if CUSTOM_FILE_CAPTION:
             try:
-                f_caption=CUSTOM_FILE_CAPTION.format(file_name= '' if title is None else title, file_size='' if size is None else size, file_caption='' if f_caption is None else f_caption)
+                f_caption = CUSTOM_FILE_CAPTION.format(
+                    file_name='' if title is None else title,
+                    file_size='' if size is None else size,
+                    file_caption='' if f_caption is None else f_caption
+                )
             except Exception as e:
                 logger.exception(e)
-                f_caption=f_caption
+                f_caption = f_caption
+                
         if f_caption is None:
             f_caption = f"{file['file_name']}"
+            
         results.append(
             InlineQueryResultCachedDocument(
                 title=file['file_name'],
@@ -89,7 +108,7 @@ async def answer(bot, query):
         try:
             await query.answer(
                 results=results,
-                is_personal = True,
+                is_personal=True,
                 cache_time=cache_time,
                 switch_pm_text=switch_pm_text,
                 switch_pm_parameter="start",
@@ -106,7 +125,7 @@ async def answer(bot, query):
 
         await query.answer(
             results=[],
-            is_personal = True,
+            is_personal=True,
             cache_time=cache_time,
             switch_pm_text=switch_pm_text,
             switch_pm_parameter="okay"
@@ -118,8 +137,3 @@ def get_reply_markup(query):
         InlineKeyboardButton('Search again', switch_inline_query_current_chat=query)
     ]]
     return InlineKeyboardMarkup(buttons)
-
-
-
-
-
