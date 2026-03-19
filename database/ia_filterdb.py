@@ -24,8 +24,9 @@ if MULTIPLE_DATABASE and SEC_FILE_DB_URI:
         sec_client = MongoClient(SEC_FILE_DB_URI)
         sec_db = sec_client[DATABASE_NAME]
         sec_col = sec_db[COLLECTION_NAME]
-    except:
-        print("⚠️ Second database connection failed, continuing with single database")
+        print("✅ Second database connected successfully")
+    except Exception as e:
+        print(f"⚠️ Second database connection failed: {e}")
         sec_col = None
 
 async def save_file(media):
@@ -85,23 +86,21 @@ def is_file_already_saved(file_id, file_name):
 
     # Check first database
     if col.find_one(found1) or col.find_one(found):
-        print(f"{file_name} is already saved in first database.")
         return True
     
     # Check second database if enabled
     if MULTIPLE_DATABASE and sec_col is not None:
         if sec_col.find_one(found1) or sec_col.find_one(found):
-            print(f"{file_name} is already saved in second database.")
             return True
 
     return False
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """SIMPLE and FAST search - minimal overhead"""
+    """FIXED: Properly handles both empty queries and text searches"""
     
     query = query.strip()
     
-    # Handle empty query - return recent files
+    # Handle empty query - return recent files with $natural sort
     if not query:
         filter_criteria = {}
         files = []
@@ -120,28 +119,37 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
 
-    # SIMPLE TEXT SEARCH - using your existing text index
+    # For text search - MUST use text score sort, NOT $natural
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
     files = []
     
-    # Search first database
-    cursor = col.find({'$text': {'$search': text_query}}).sort('$natural', -1).skip(offset).limit(max_results)
+    # Search first database - using text score sort (required for text search)
+    cursor = col.find(
+        {'$text': {'$search': text_query}},
+        {'score': {'$meta': 'textScore'}}
+    ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+    
     files = list(cursor)
     total_results = col.count_documents({'$text': {'$search': text_query}})
     
     # Search second database if enabled
     if MULTIPLE_DATABASE and sec_col is not None:
-        cursor2 = sec_col.find({'$text': {'$search': text_query}}).sort('$natural', -1).skip(offset).limit(max_results)
-        files.extend(list(cursor2))
+        cursor2 = sec_col.find(
+            {'$text': {'$search': text_query}},
+            {'score': {'$meta': 'textScore'}}
+        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+        
+        second_files = list(cursor2)
+        files.extend(second_files)
         total_results += sec_col.count_documents({'$text': {'$search': text_query}})
     
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
     return files, next_offset, total_results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
-    """Simple version for getting all files"""
+    """FIXED: Properly handles text search"""
     query = query.strip()
 
     if not query:
@@ -154,7 +162,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
         
         return files, total_results
 
-    # Simple text search
+    # For text search - use text search without sort (faster for bad files)
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
