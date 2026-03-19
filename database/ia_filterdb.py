@@ -10,18 +10,17 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
 
-# First Database
+# DB CONNECTION
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
-# Second Database
 sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
 
-# ✅ SAVE FILE
+# SAVE FILE
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
@@ -31,7 +30,7 @@ async def save_file(media):
         'file_name': file_name,
         'file_size': media.file_size,
         'caption': media.caption.html if media.caption else None,
-        'created_at': datetime.utcnow()  # 🔥 NEW (for perfect sorting)
+        'created_at': datetime.utcnow()
     }
 
     if is_file_already_saved(file_id, file_name):
@@ -39,7 +38,6 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
-        print(f"{file_name} saved.")
         return True, 1
     except DuplicateKeyError:
         return False, 0
@@ -54,34 +52,30 @@ async def save_file(media):
             print("Database Full!")
 
 
-# ✅ CLEAN FILE NAME
+# CLEAN NAME
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
-    unwanted_chars = ['[', ']', '(', ')', '{', '}']
-
-    for char in unwanted_chars:
-        file_name = file_name.replace(char, '')
+    unwanted = ['[', ']', '(', ')', '{', '}']
+    for ch in unwanted:
+        file_name = file_name.replace(ch, '')
 
     return ' '.join(
         filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'), file_name.split())
     )
 
 
-# ✅ CHECK DUPLICATE
+# DUPLICATE CHECK
 def is_file_already_saved(file_id, file_name):
-    found1 = {'file_name': file_name}
-    found = {'file_id': file_id}
-
     for collection in [col, sec_col]:
-        if collection.find_one(found1) or collection.find_one(found):
+        if collection.find_one({'file_id': file_id}) or collection.find_one({'file_name': file_name}):
             return True
     return False
 
 
-# 🔥🔥🔥 FINAL UNIVERSAL SEARCH (SYNC FIXED)
+# 🔥🔥🔥 FINAL REAL-TIME SEARCH ENGINE
 async def get_search_results(*args, file_type=None, max_results=10, offset=0, filter=False):
 
-    # ✅ HANDLE BOTH CALL TYPES
+    # SUPPORT BOTH CALLS
     if len(args) == 2:
         chat_id, query = args
     else:
@@ -90,99 +84,75 @@ async def get_search_results(*args, file_type=None, max_results=10, offset=0, fi
     if isinstance(query, int):
         query = ""
 
-    query = str(query).strip()
+    query = str(query).strip().lower()
 
-    # ✅ SHOW LATEST FILES
-    if not query:
-        if MULTIPLE_DATABASE:
-            files = list(col.find({})) + list(sec_col.find({}))
-        else:
-            files = list(col.find({}))
+    # ✅ FETCH ALL FILES
+    if MULTIPLE_DATABASE:
+        all_files = list(col.find({})) + list(sec_col.find({}))
+    else:
+        all_files = list(col.find({}))
 
-        # 🔥 FIXED SORT (REAL TIME)
-        files = sorted(
-            files,
-            key=lambda x: x.get("created_at", x["_id"].generation_time),
-            reverse=True
-        )
+    # 🔥 SORT BY TIME (PERFECT SYNC)
+    all_files = sorted(
+        all_files,
+        key=lambda x: x.get("created_at", x["_id"].generation_time),
+        reverse=True
+    )
 
-        total_results = len(files)
-        files = files[offset: offset + max_results]
+    # 🔍 FILTER SEARCH
+    if query:
+        keywords = query.split()
+        filtered = []
 
-        next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-        return files, next_offset, total_results
+        for file in all_files:
+            name = file.get("file_name", "").lower()
+            if all(k in name for k in keywords):
+                filtered.append(file)
 
-    # ✅ TEXT SEARCH
-    keywords = query.lower().split()
-    text_query = ' '.join([f'"{kw}"' for kw in keywords])
+        all_files = filtered
+
+    total_results = len(all_files)
+
+    # 📄 PAGINATION AFTER MERGE
+    files = all_files[offset: offset + max_results]
+
+    next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
+
+    return files, next_offset, total_results
+
+
+# APPROVE SYSTEM
+async def get_bad_files(query, file_type=None, use_filter=False):
+
+    query = str(query).strip().lower()
 
     if MULTIPLE_DATABASE:
-        files = list(col.find({'$text': {'$search': text_query}})) + \
-                list(sec_col.find({'$text': {'$search': text_query}}))
+        files = list(col.find({})) + list(sec_col.find({}))
     else:
-        files = list(col.find({'$text': {'$search': text_query}}))
+        files = list(col.find({}))
 
-    # 🔥 FIXED SORT
     files = sorted(
         files,
         key=lambda x: x.get("created_at", x["_id"].generation_time),
         reverse=True
     )
 
-    total_results = len(files)
-    files = files[offset: offset + max_results]
-
-    next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-    return files, next_offset, total_results
-
-
-# ✅ REQUIRED FOR APPROVE
-async def get_bad_files(query, file_type=None, use_filter=False):
-
-    query = str(query).strip()
-
-    if not query:
-        if MULTIPLE_DATABASE:
-            files = list(col.find({})) + list(sec_col.find({}))
-        else:
-            files = list(col.find({}))
-
-        files = sorted(
-            files,
-            key=lambda x: x.get("created_at", x["_id"].generation_time),
-            reverse=True
-        )
-
-        return files, len(files)
-
-    keywords = query.lower().split()
-    text_query = ' '.join([f'"{kw}"' for kw in keywords])
-
-    if MULTIPLE_DATABASE:
-        files = list(col.find({'$text': {'$search': text_query}})) + \
-                list(sec_col.find({'$text': {'$search': text_query}}))
-    else:
-        files = list(col.find({'$text': {'$search': text_query}}))
+    if query:
+        keywords = query.split()
+        files = [f for f in files if all(k in f.get("file_name", "").lower() for k in keywords)]
 
     # REMOVE DUPLICATES
     seen = set()
-    unique_files = []
+    unique = []
     for f in files:
         if f['file_id'] not in seen:
             seen.add(f['file_id'])
-            unique_files.append(f)
+            unique.append(f)
 
-    # 🔥 SORT FIXED
-    unique_files = sorted(
-        unique_files,
-        key=lambda x: x.get("created_at", x["_id"].generation_time),
-        reverse=True
-    )
-
-    return unique_files, len(unique_files)
+    return unique, len(unique)
 
 
-# ✅ GET FILE DETAILS
+# FILE DETAILS
 async def get_file_details(query):
     result = col.find_one({'file_id': query})
     if not result and MULTIPLE_DATABASE:
@@ -190,7 +160,7 @@ async def get_file_details(query):
     return result
 
 
-# ✅ ENCODE
+# ENCODE
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -205,16 +175,14 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
-# ✅ DECODE
+# DECODE
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
-    file_id = encode_file_id(
-        pack(
-            "<iiqq",
+    return encode_file_id(
+        pack("<iiqq",
             int(decoded.file_type),
             decoded.dc_id,
             decoded.media_id,
             decoded.access_hash
         )
     )
-    return file_id
