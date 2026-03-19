@@ -72,16 +72,19 @@ async def answer(bot, query: InlineQuery):
 
     reply_markup = get_reply_markup(query=search_query)
 
-    # ✅ FETCH FILES
+    # ✅ FETCH FILES - FIXED: Added missing chat_id parameter
+    # For inline search, we pass None as chat_id to search all files
     files, next_offset, total = await get_search_results(
+        None,  # chat_id (None = search all files)
         search_query,
         file_type=file_type,
         max_results=10,
-        offset=offset
+        offset=offset,
+        filter=False
     )
 
     # 🧠 DEBUG (REMOVE AFTER TEST)
-    print("INLINE FETCHED:", len(files), "QUERY:", search_query)
+    print(f"INLINE FETCHED: {len(files)} files, QUERY: '{search_query}', TOTAL: {total}")
 
     # 🎬 BUILD RESULTS
     for file in files:
