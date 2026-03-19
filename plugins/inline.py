@@ -3,9 +3,15 @@
 # Ask Doubt on telegram @KingVJ01
 
 import logging
-from pyrogram import Client, emoji, filters
+from pyrogram import Client, emoji
 from pyrogram.errors.exceptions.bad_request_400 import QueryIdInvalid
-from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultCachedDocument, InlineQuery
+from pyrogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultCachedDocument,
+    InlineQuery
+)
+
 from database.ia_filterdb import get_search_results
 from utils import is_subscribed, get_size, temp
 from info import CACHE_TIME, AUTH_USERS, AUTH_CHANNEL, CUSTOM_FILE_CAPTION
@@ -13,6 +19,8 @@ from info import CACHE_TIME, AUTH_USERS, AUTH_CHANNEL, CUSTOM_FILE_CAPTION
 logger = logging.getLogger(__name__)
 cache_time = 0 if AUTH_USERS or AUTH_CHANNEL else CACHE_TIME
 
+
+# ✅ Check allowed users
 async def inline_users(query: InlineQuery):
     if AUTH_USERS:
         if query.from_user and query.from_user.id in AUTH_USERS:
@@ -23,10 +31,13 @@ async def inline_users(query: InlineQuery):
         return True
     return False
 
+
+# ✅ Inline query handler
 @Client.on_inline_query()
-async def answer(bot, query):
-    """Show search results for given inline query"""
-    
+async def answer(bot, query: InlineQuery):
+    """Show search results or latest movies"""
+
+    # ❌ Unauthorized users
     if not await inline_users(query):
         await query.answer(
             results=[],
@@ -36,6 +47,7 @@ async def answer(bot, query):
         )
         return
 
+    # ❌ Force join channel
     if AUTH_CHANNEL and not await is_subscribed(bot, query):
         await query.answer(
             results=[],
@@ -46,6 +58,8 @@ async def answer(bot, query):
         return
 
     results = []
+
+    # 🔍 Handle query + filter
     if '|' in query.query:
         string, file_type = query.query.split('|', maxsplit=1)
         string = string.strip()
@@ -54,50 +68,60 @@ async def answer(bot, query):
         string = query.query.strip()
         file_type = None
 
-    # If string is empty, show recent files
-    if not string:
-        string = ""
-
     offset = int(query.offset or 0)
-    reply_markup = get_reply_markup(query=string)
-    
-    # IMPORTANT FIX: Don't pass chat_id - search ALL files directly
-    # This matches PROFESSOR-BOT's approach
-    files, next_offset, total = await get_search_results(string, file_type=file_type, max_results=10, offset=offset)
 
+    # 🔥 If empty → show latest movies
+    if not string:
+        search_query = ""
+    else:
+        search_query = string
+
+    reply_markup = get_reply_markup(query=search_query)
+
+    # ✅ Fetch files (latest first handled in DB)
+    files, next_offset, total = await get_search_results(
+        search_query,
+        file_type=file_type,
+        max_results=10,
+        offset=offset
+    )
+
+    # 🎬 Build results
     for file in files:
-        title = file['file_name']
-        size = get_size(file['file_size'])
-        f_caption = file['caption']
-        
+        title = file.get('file_name')
+        size = get_size(file.get('file_size'))
+        f_caption = file.get('caption')
+
         if CUSTOM_FILE_CAPTION:
             try:
                 f_caption = CUSTOM_FILE_CAPTION.format(
-                    file_name='' if title is None else title,
-                    file_size='' if size is None else size,
-                    file_caption='' if f_caption is None else f_caption
+                    file_name=title or '',
+                    file_size=size or '',
+                    file_caption=f_caption or ''
                 )
             except Exception as e:
                 logger.exception(e)
-                f_caption = f_caption
-                
-        if f_caption is None:
-            f_caption = f"{file['file_name']}"
-            
+
+        if not f_caption:
+            f_caption = title or "No Name"
+
         results.append(
             InlineQueryResultCachedDocument(
-                title=file['file_name'],
+                title=title,
                 document_file_id=file['file_id'],
                 caption=f_caption,
-                description=f'Size: {get_size(file["file_size"])}',
+                description=f"Size: {size}",
                 reply_markup=reply_markup
             )
         )
 
+    # ✅ Send results
     if results:
-        switch_pm_text = f"{emoji.FILE_FOLDER} Results - {total}"
-        if string:
-            switch_pm_text += f" for {string}"
+        if not string:
+            switch_pm_text = f"🆕 Latest Movies ({total})"
+        else:
+            switch_pm_text = f"{emoji.FILE_FOLDER} Results - {total} for {string}"
+
         try:
             await query.answer(
                 results=results,
@@ -110,11 +134,14 @@ async def answer(bot, query):
         except QueryIdInvalid:
             pass
         except Exception as e:
-            logging.exception(str(e))
+            logger.exception(e)
+
+    # ❌ No results
     else:
-        switch_pm_text = f'{emoji.CROSS_MARK} No results'
-        if string:
-            switch_pm_text += f' for "{string}"'
+        if not string:
+            switch_pm_text = "❌ No movies available"
+        else:
+            switch_pm_text = f'❌ No results for "{string}"'
 
         await query.answer(
             results=[],
@@ -125,8 +152,12 @@ async def answer(bot, query):
         )
 
 
+# 🔁 Inline button
 def get_reply_markup(query):
     buttons = [[
-        InlineKeyboardButton('⟳ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ', switch_inline_query_current_chat=query)
+        InlineKeyboardButton(
+            '⟳ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ',
+            switch_inline_query_current_chat=query
+        )
     ]]
     return InlineKeyboardMarkup(buttons)
