@@ -9,7 +9,6 @@ from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQue
 from database.ia_filterdb import get_search_results
 from utils import is_subscribed, get_size, temp
 from info import CACHE_TIME, AUTH_USERS, AUTH_CHANNEL, CUSTOM_FILE_CAPTION
-from database.connections_mdb import active_connection
 
 logger = logging.getLogger(__name__)
 cache_time = 0 if AUTH_USERS or AUTH_CHANNEL else CACHE_TIME
@@ -27,13 +26,6 @@ async def inline_users(query: InlineQuery):
 @Client.on_inline_query()
 async def answer(bot, query):
     """Show search results for given inline query"""
-    
-    # Get chat_id for the user - if no active connection, use None (will search all files)
-    chat_id = await active_connection(str(query.from_user.id))
-    
-    # If no active connection, set to None to search all files
-    if not chat_id:
-        chat_id = None
     
     if not await inline_users(query):
         await query.answer(
@@ -69,8 +61,9 @@ async def answer(bot, query):
     offset = int(query.offset or 0)
     reply_markup = get_reply_markup(query=string)
     
-    # Get search results - if chat_id is None, it will search all files
-    files, next_offset, total = await get_search_results(chat_id, string, file_type=file_type, max_results=10, offset=offset)
+    # IMPORTANT FIX: Don't pass chat_id - search ALL files directly
+    # This matches PROFESSOR-BOT's approach
+    files, next_offset, total = await get_search_results(string, file_type=file_type, max_results=10, offset=offset)
 
     for file in files:
         title = file['file_name']
@@ -134,6 +127,6 @@ async def answer(bot, query):
 
 def get_reply_markup(query):
     buttons = [[
-        InlineKeyboardButton('Search again', switch_inline_query_current_chat=query)
+        InlineKeyboardButton('⟳ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ', switch_inline_query_current_chat=query)
     ]]
     return InlineKeyboardMarkup(buttons)
