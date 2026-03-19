@@ -20,16 +20,11 @@ logger = logging.getLogger(__name__)
 cache_time = 0 if AUTH_USERS or AUTH_CHANNEL else CACHE_TIME
 
 
-# ✅ CHECK USER
+# ✅ USER CHECK
 async def inline_users(query: InlineQuery):
     if AUTH_USERS:
-        if query.from_user and query.from_user.id in AUTH_USERS:
-            return True
-        else:
-            return False
-    if query.from_user and query.from_user.id not in temp.BANNED_USERS:
-        return True
-    return False
+        return query.from_user and query.from_user.id in AUTH_USERS
+    return query.from_user and query.from_user.id not in temp.BANNED_USERS
 
 
 # ✅ INLINE HANDLER
@@ -46,7 +41,7 @@ async def answer(bot, query: InlineQuery):
         )
         return
 
-    # ❌ FORCE JOIN
+    # ❌ FORCE SUB
     if AUTH_CHANNEL and not await is_subscribed(bot, query):
         await query.answer(
             results=[],
@@ -58,7 +53,7 @@ async def answer(bot, query: InlineQuery):
 
     results = []
 
-    # 🔍 SPLIT QUERY
+    # 🔍 GET QUERY
     if '|' in query.query:
         string, file_type = query.query.split('|', maxsplit=1)
         string = string.strip()
@@ -69,26 +64,24 @@ async def answer(bot, query: InlineQuery):
 
     offset = int(query.offset or 0)
 
-    reply_markup = get_reply_markup(query=string)
-
-    # 🔥🔥🔥 MAIN FIX (PROFESSOR STYLE)
+    # 🔥 FORCE LATEST WHEN EMPTY (VERY IMPORTANT)
     if not string:
-        files, next_offset, total = await get_search_results(
-            "",
-            file_type=None,
-            max_results=10,
-            offset=offset
-        )
+        search_query = ""
     else:
-        files, next_offset, total = await get_search_results(
-            string,
-            file_type=file_type,
-            max_results=10,
-            offset=offset
-        )
+        search_query = string
 
-    # 🧠 DEBUG (remove later if needed)
-    print("INLINE FILES:", len(files))
+    reply_markup = get_reply_markup(query=search_query)
+
+    # ✅ FETCH FILES
+    files, next_offset, total = await get_search_results(
+        search_query,
+        file_type=file_type,
+        max_results=10,
+        offset=offset
+    )
+
+    # 🧠 DEBUG (REMOVE AFTER TEST)
+    print("INLINE FETCHED:", len(files), "QUERY:", search_query)
 
     # 🎬 BUILD RESULTS
     for file in files:
@@ -131,9 +124,9 @@ async def answer(bot, query: InlineQuery):
                 results=results,
                 is_personal=True,
                 cache_time=cache_time,
+                next_offset=str(next_offset),
                 switch_pm_text=switch_pm_text,
-                switch_pm_parameter="start",
-                next_offset=str(next_offset)
+                switch_pm_parameter="start"
             )
         except QueryIdInvalid:
             pass
@@ -158,10 +151,11 @@ async def answer(bot, query: InlineQuery):
 
 # 🔁 BUTTON
 def get_reply_markup(query):
-    buttons = [[
-        InlineKeyboardButton(
-            '⟳ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ',
-            switch_inline_query_current_chat=query
-        )
-    ]]
-    return InlineKeyboardMarkup(buttons)
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(
+                '⟳ sᴇᴀʀᴄʜ ᴀɢᴀɪɴ',
+                switch_inline_query_current_chat=query
+            )
+        ]
+    ])
