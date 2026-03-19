@@ -76,10 +76,20 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🔥 MAIN SEARCH FUNCTION
-async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
+# 🔥🔥🔥 FIXED UNIVERSAL SEARCH FUNCTION
+async def get_search_results(*args, file_type=None, max_results=10, offset=0, filter=False):
 
-    query = query.strip()
+    # ✅ SUPPORT BOTH CALL TYPES
+    if len(args) == 2:
+        chat_id, query = args
+    else:
+        query = args[0]
+
+    # 🛡️ FIX ERROR (int → string)
+    if isinstance(query, int):
+        query = ""
+
+    query = str(query).strip()
 
     # ✅ SHOW LATEST FILES
     if not query:
@@ -121,12 +131,11 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
     return files, next_offset, total_results
 
 
-# 🔥 FIXED FUNCTION (FOR APPROVE PLUGIN)
+# ✅ REQUIRED FOR APPROVE PLUGIN
 async def get_bad_files(query, file_type=None, use_filter=False):
 
-    query = query.strip()
+    query = str(query).strip()
 
-    # ✅ NO QUERY → LATEST
     if not query:
         if MULTIPLE_DATABASE:
             files = list(col.find({}).sort("_id", -1)) + list(sec_col.find({}).sort("_id", -1))
@@ -135,7 +144,6 @@ async def get_bad_files(query, file_type=None, use_filter=False):
 
         return files, len(files)
 
-    # ✅ SEARCH
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
 
@@ -145,7 +153,6 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     else:
         files = list(col.find({'$text': {'$search': text_query}}))
 
-    # ✅ REMOVE DUPLICATES
     seen = set()
     unique_files = []
     for f in files:
@@ -153,7 +160,6 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             seen.add(f['file_id'])
             unique_files.append(f)
 
-    # ✅ SORT LATEST
     unique_files = sorted(unique_files, key=lambda x: x["_id"], reverse=True)
 
     return unique_files, len(unique_files)
@@ -167,7 +173,7 @@ async def get_file_details(query):
     return result
 
 
-# ✅ FILE ID ENCODE
+# ✅ ENCODE FILE ID
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -182,7 +188,7 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
-# ✅ FILE ID DECODE
+# ✅ DECODE FILE ID
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     file_id = encode_file_id(
