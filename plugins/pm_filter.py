@@ -478,29 +478,55 @@ async def episodes_cb_handler(client: Client, query: CallbackQuery):
     except MessageNotModified:
         pass
 
-@Client.on_callback_query(filters.regex(r"^fe#"))
-async def filter_episodes_cb_handler(client: Client, query: CallbackQuery):
-    _, lang, key = query.data.split("#")
-    curr_time = datetime.now(pytz.timezone('Asia/Kolkata')).time()
-    search = FRESH.get(key)
+@Client.on_callback_query(filters.regex(r"^fl#"))
+async def filter_qualities_cb_handler(client: Client, query: CallbackQuery):
+    _, qual, key = query.data.split("#")
+
     try:
-        search = search.replace(' ', '_')
+        if int(query.from_user.id) not in [query.message.reply_to_message.from_user.id, 0]:
+            return await query.answer(
+                f"⚠️ ʜᴇʟʟᴏ {query.from_user.first_name},\nᴛʜɪꜱ ɪꜱ ɴᴏᴛ ʏᴏᴜʀ ᴍᴏᴠɪᴇ ʀᴇQᴜᴇꜱᴛ,\nʀᴇQᴜᴇꜱᴛ ʏᴏᴜʀ'ꜱ...",
+                show_alert=False,
+            )
     except:
         pass
-    baal = lang in search
-    if baal:
-        search = search.replace(lang, "")
-    else:
-        search = search
-    req = query.from_user.id
-    chat_id = query.message.chat.id
-    message = query.message
-    try:
-        if int(req) not in [query.message.reply_to_message.from_user.id, 0]:
-            return await query.answer(
-                f"⚠️ ʜᴇʟʟᴏ{query.from_user.first_name},\nᴛʜɪꜱ ɪꜱ ɴᴏᴛ ʏᴏᴜʀ ᴍᴏᴠɪᴇ ʀᴇQᴜᴇꜱᴛ,\nʀᴇQᴜᴇꜱᴛ ʏᴏᴜʀ'ꜱ...",
-                show_alert=True,
+
+    # ✅ USE STORED FILES (IMPORTANT)
+    files = temp.GETALL.get(key, [])
+
+    if not files:
+        return await query.answer("❌ Old search expired", show_alert=True)
+
+    # 🔥 FILTER QUALITY
+    files = [
+        file for file in files
+        if qual.lower() in file['file_name'].lower()
+    ]
+
+    if not files:
+        return await query.answer("🚫 No files found", show_alert=True)
+
+    settings = await get_settings(query.message.chat.id)
+    pre = 'filep' if settings['file_secure'] else 'file'
+
+    btn = [
+        [
+            InlineKeyboardButton(
+                text=f"[{get_size(file['file_size'])}] {' '.join(file['file_name'].split())}",
+                callback_data=f'{pre}#{file["file_id"]}'
             )
+        ]
+        for file in files[:10]
+    ]
+
+    btn.append([
+        InlineKeyboardButton("↭ ʙᴀᴄᴋ ᴛᴏ ǫᴜᴀʟɪᴛʏ ↭", callback_data=f"qualities#{key}")
+    ])
+
+    try:
+        await query.edit_message_reply_markup(
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
     except:
         pass
     if lang != "homepage":
