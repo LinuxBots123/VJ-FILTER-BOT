@@ -55,6 +55,7 @@ async def save_file(media):
                 return False, 0
         else:
             print("Database Full! Enable MULTIPLE_DATABASE.")
+            return False, 0
 
 
 def clean_file_name(file_name):
@@ -85,7 +86,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🔥 FAST SEARCH (FIXED)
+# 🔥 FAST SEARCH (FIXED - WITH WORD BOUNDARIES)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip()
@@ -113,8 +114,20 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         next_offset = "" if (offset + max_results) >= total else offset + max_results
         return files, next_offset, total
 
-    # 🚀 TEXT SEARCH (SUPER FAST)
-    filter_query = {"$text": {"$search": query}}
+    # 🚀 FIXED TEXT SEARCH - USING PHRASE MATCHING
+    # Split query into keywords
+    keywords = query.lower().split()
+    
+    if len(keywords) == 1:
+        # Single keyword - use text search but ensure it's a whole word
+        # The \" makes it a phrase search
+        search_string = f'"{keywords[0]}"'
+    else:
+        # Multiple keywords - require ALL as whole words
+        # This creates: "keyword1" "keyword2" "keyword3"
+        search_string = ' '.join([f'"{kw}"' for kw in keywords])
+    
+    filter_query = {"$text": {"$search": search_string}}
 
     files = []
 
@@ -163,7 +176,10 @@ async def get_bad_files(query, file_type=None, use_filter=False):
 
 
 async def get_file_details(query):
-    return col.find_one({'file_id': query}) or sec_col.find_one({'file_id': query})
+    result = col.find_one({'file_id': query})
+    if not result and MULTIPLE_DATABASE:
+        result = sec_col.find_one({'file_id': query})
+    return result
 
 
 def encode_file_id(s: bytes) -> str:
@@ -190,4 +206,4 @@ def unpack_new_file_id(new_file_id):
             decoded.media_id,
             decoded.access_hash
         )
-    )
+            )
