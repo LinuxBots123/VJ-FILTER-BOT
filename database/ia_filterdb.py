@@ -14,23 +14,14 @@ client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
-# Second Database - Always define it, even if MULTIPLE_DATABASE is False
-sec_client = None
-sec_db = None
-sec_col = None
-
-if MULTIPLE_DATABASE and SEC_FILE_DB_URI:
-    try:
-        sec_client = MongoClient(SEC_FILE_DB_URI)
-        sec_db = sec_client[DATABASE_NAME]
-        sec_col = sec_db[COLLECTION_NAME]
-        print("✅ Second database connected successfully")
-    except Exception as e:
-        print(f"⚠️ Second database connection failed: {e}")
-        sec_col = None
+# Second Database For File Saving
+sec_client = MongoClient(SEC_FILE_DB_URI)
+sec_db = sec_client[DATABASE_NAME]
+sec_col = sec_db[COLLECTION_NAME]
 
 async def save_file(media):
     """Save file in the database."""
+
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
     new_file_name = f"@VJ_Bots {file_name}"
@@ -52,22 +43,17 @@ async def save_file(media):
     except DuplicateKeyError:
         print(f"{file_name} is already saved.")
         return False, 0
-    except Exception as e:
-        # If first DB fails and multiple DB is enabled, try second
-        if MULTIPLE_DATABASE and sec_col is not None:
+    except:
+        if MULTIPLE_DATABASE:
             try:
                 sec_col.insert_one(file)
-                print(f"{file_name} is successfully saved in second database.")
+                print(f"{file_name} is successfully saved.")
                 return True, 1
             except DuplicateKeyError:
-                print(f"{file_name} is already saved in second database.")
-                return False, 0
-            except Exception as e2:
-                print(f"Error saving to second database: {e2}")
+                print(f"{file_name} is already saved.")
                 return False, 0
         else:
-            print(f"Error saving file: {e}")
-            return False, 0
+            print("Your Current File Database Is Full, Turn On Multiple Database Feature And Add Second File Mongodb To Save File.")
 
 def clean_file_name(file_name):
     """Clean and format the file name."""
@@ -84,104 +70,144 @@ def is_file_already_saved(file_id, file_name):
     found1 = {'file_name': file_name}
     found = {'file_id': file_id}
 
-    # Check first database
-    if col.find_one(found1) or col.find_one(found):
-        return True
-    
-    # Check second database if enabled
-    if MULTIPLE_DATABASE and sec_col is not None:
-        if sec_col.find_one(found1) or sec_col.find_one(found):
+    for collection in [col, sec_col]:
+        if collection.find_one(found1) or collection.find_one(found):
+            print(f"{file_name} is already saved.")
             return True
 
     return False
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """FIXED: Properly handles both empty queries and text searches"""
+    """ULTRA-FAST search using MongoDB text search with AND operator for multiple keywords"""
     
     query = query.strip()
     
-    # Handle empty query - return recent files with $natural sort
     if not query:
+        # Return recent files with estimated count (fastest)
         filter_criteria = {}
         files = []
         
-        # Get from first database
-        cursor = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
-        files = list(cursor)
-        total_results = col.estimated_document_count()
-        
-        # Add from second database if enabled
-        if MULTIPLE_DATABASE and sec_col is not None:
+        if MULTIPLE_DATABASE:
+            # Parallel execution for speed
+            cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
             cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
-            files.extend(list(cursor2))
-            total_results += sec_col.estimated_document_count()
+            
+            files = list(cursor1) + list(cursor2)
+            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+        else:
+            cursor = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
+            files = list(cursor)
+            total_results = col.estimated_document_count()
         
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
 
-    # For text search - MUST use text score sort, NOT $natural
+    # FAST TEXT SEARCH - using MongoDB's text index
+    # Split query into keywords
     keywords = query.lower().split()
+    
+    # Create text search query that REQUIRES all keywords
+    # Using double quotes makes each keyword required
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
-    files = []
-    
-    # Search first database - using text score sort (required for text search)
-    cursor = col.find(
-        {'$text': {'$search': text_query}},
-        {'score': {'$meta': 'textScore'}}
-    ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
-    
-    files = list(cursor)
-    total_results = col.count_documents({'$text': {'$search': text_query}})
-    
-    # Search second database if enabled
-    if MULTIPLE_DATABASE and sec_col is not None:
+    # Use text search with relevance scoring
+    if MULTIPLE_DATABASE:
+        # Search in first database
+        cursor1 = col.find(
+            {'$text': {'$search': text_query}},
+            {'score': {'$meta': 'textScore'}}
+        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+        
+        # Search in second database
         cursor2 = sec_col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
-        second_files = list(cursor2)
-        files.extend(second_files)
-        total_results += sec_col.count_documents({'$text': {'$search': text_query}})
+        # Combine results
+        files = list(cursor1) + list(cursor2)
+        
+        # Get total count (fast with text index)
+        total_results = col.count_documents({'$text': {'$search': text_query}}) + \
+                       sec_col.count_documents({'$text': {'$search': text_query}})
+    else:
+        # Single database search
+        cursor = col.find(
+            {'$text': {'$search': text_query}},
+            {'score': {'$meta': 'textScore'}}
+        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+        
+        files = list(cursor)
+        total_results = col.count_documents({'$text': {'$search': text_query}})
     
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
     return files, next_offset, total_results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
-    """FIXED: Properly handles text search"""
+    """ULTRA-FAST version for getting all files matching query"""
     query = query.strip()
 
     if not query:
-        files = list(col.find({}))
-        total_results = len(files)
-        
-        if MULTIPLE_DATABASE and sec_col is not None:
-            files.extend(list(sec_col.find({})))
-            total_results = len(files)
-        
+        # Return all files with estimated count
+        if MULTIPLE_DATABASE:
+            files = list(col.find({})) + list(sec_col.find({}))
+            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+        else:
+            files = list(col.find({}))
+            total_results = col.estimated_document_count()
         return files, total_results
 
-    # For text search - use text search without sort (faster for bad files)
+    # Use text search for fast results
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
-    files = list(col.find({'$text': {'$search': text_query}}))
-    total_results = len(files)
-    
-    if MULTIPLE_DATABASE and sec_col is not None:
-        files.extend(list(sec_col.find({'$text': {'$search': text_query}})))
-        total_results = len(files)
+    if MULTIPLE_DATABASE:
+        # Search both databases
+        files = list(col.find({'$text': {'$search': text_query}})) + \
+                list(sec_col.find({'$text': {'$search': text_query}}))
+        
+        total_results = col.count_documents({'$text': {'$search': text_query}}) + \
+                       sec_col.count_documents({'$text': {'$search': text_query}})
+        
+        if USE_CAPTION_FILTER:
+            # Also search in captions if enabled
+            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}})) + \
+                           list(sec_col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
+            files.extend(caption_files)
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_files = []
+            for f in files:
+                if f['file_id'] not in seen:
+                    seen.add(f['file_id'])
+                    unique_files.append(f)
+            files = unique_files
+            total_results = len(files)
+    else:
+        # Single database search
+        files = list(col.find({'$text': {'$search': text_query}}))
+        total_results = col.count_documents({'$text': {'$search': text_query}})
+        
+        if USE_CAPTION_FILTER:
+            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
+            files.extend(caption_files)
+            # Remove duplicates
+            seen = set()
+            unique_files = []
+            for f in files:
+                if f['file_id'] not in seen:
+                    seen.add(f['file_id'])
+                    unique_files.append(f)
+            files = unique_files
+            total_results = len(files)
 
     return files, total_results
 
 async def get_file_details(query):
     """Get file details by file_id"""
     result = col.find_one({'file_id': query})
-    
-    if not result and MULTIPLE_DATABASE and sec_col is not None:
+    if not result and MULTIPLE_DATABASE:
         result = sec_col.find_one({'file_id': query})
-    
     return result
 
 def encode_file_id(s: bytes) -> str:
