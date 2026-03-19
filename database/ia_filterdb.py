@@ -2,27 +2,34 @@
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
-import re, base64, json
+import re, base64
 from struct import pack
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
-from info import FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER, MAX_B_TN
+from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER
 
-# DB CONNECTION
+# First Database
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
-sec_col = col   # already added
-sec_db = db     # 🔥 ADD THIS NOW
-# ✅ SAVE FILE
+
+# Second Database
+sec_client = MongoClient(SEC_FILE_DB_URI)
+sec_db = sec_client[DATABASE_NAME]
+sec_col = sec_db[COLLECTION_NAME]
+
+
 async def save_file(media):
+    """Save file in the database."""
+
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
+    new_file_name = f"@VJ_Bots {file_name}"
 
     file = {
         'file_id': file_id,
-        'file_name': file_name,
+        'file_name': new_file_name,
         'file_size': media.file_size,
         'caption': media.caption.html if media.caption else None
     }
@@ -32,103 +39,133 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
-        print(f"{file_name} saved.")
+        print(f"{file_name} is successfully saved.")
         return True, 1
     except DuplicateKeyError:
+        print(f"{file_name} is already saved.")
         return False, 0
+    except:
+        if MULTIPLE_DATABASE:
+            try:
+                sec_col.insert_one(file)
+                print(f"{file_name} is successfully saved.")
+                return True, 1
+            except DuplicateKeyError:
+                print(f"{file_name} is already saved.")
+                return False, 0
+        else:
+            print("Database Full! Enable MULTIPLE_DATABASE.")
 
 
-# ✅ CLEAN FILE NAME
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
-    unwanted = ['[', ']', '(', ')', '{', '}']
-    for ch in unwanted:
-        file_name = file_name.replace(ch, '')
+    unwanted_chars = ['[', ']', '(', ')', '{', '}']
+
+    for char in unwanted_chars:
+        file_name = file_name.replace(char, '')
 
     return ' '.join(
-        filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'), file_name.split())
+        x for x in file_name.split()
+        if not x.startswith('@')
+        and not x.startswith('http')
+        and not x.startswith('www.')
+        and not x.startswith('t.me')
     )
 
 
-# ✅ CHECK DUPLICATE
 def is_file_already_saved(file_id, file_name):
-    if col.find_one({'file_id': file_id}) or col.find_one({'file_name': file_name}):
-        return True
+    found1 = {'file_name': file_name}
+    found = {'file_id': file_id}
+
+    for collection in [col, sec_col]:
+        if collection.find_one(found1) or collection.find_one(found):
+            print(f"{file_name} already exists.")
+            return True
+
     return False
 
 
-# 🔥🔥🔥 FINAL FIXED SEARCH (SINGLE DB, SCALABLE)
-async def get_search_results(*args, file_type=None, max_results=10, offset=0, filter=False):
+# 🔥 FAST SEARCH (FIXED)
+async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
-    # SUPPORT BOTH CALL TYPES
-    if len(args) == 2:
-        chat_id, query = args
+    query = query.strip()
+
+    if not query:
+        files = []
+        if MULTIPLE_DATABASE:
+            cursor1 = col.find().sort('$natural', -1).skip(offset).limit(max_results)
+            cursor2 = sec_col.find().sort('$natural', -1).skip(offset).limit(max_results)
+
+            for f in cursor1:
+                files.append(f)
+            for f in cursor2:
+                files.append(f)
+
+            total = col.count_documents({}) + sec_col.count_documents({})
+        else:
+            cursor = col.find().sort('$natural', -1).skip(offset).limit(max_results)
+
+            for f in cursor:
+                files.append(f)
+
+            total = col.count_documents({})
+
+        next_offset = "" if (offset + max_results) >= total else offset + max_results
+        return files, next_offset, total
+
+    # 🚀 TEXT SEARCH (SUPER FAST)
+    filter_query = {"$text": {"$search": query}}
+
+    files = []
+
+    if MULTIPLE_DATABASE:
+        cursor1 = col.find(filter_query, {"score": {"$meta": "textScore"}})\
+            .sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
+
+        cursor2 = sec_col.find(filter_query, {"score": {"$meta": "textScore"}})\
+            .sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
+
+        for f in cursor1:
+            files.append(f)
+        for f in cursor2:
+            files.append(f)
+
+        total = col.count_documents(filter_query) + sec_col.count_documents(filter_query)
+
     else:
-        query = args[0]
+        cursor = col.find(filter_query, {"score": {"$meta": "textScore"}})\
+            .sort([("score", {"$meta": "textScore"})]).skip(offset).limit(max_results)
 
-    if isinstance(query, int):
-        query = ""
+        for f in cursor:
+            files.append(f)
 
-    query = str(query).strip()
+        total = col.count_documents(filter_query)
 
-    filter_query = {}
-
-    # 🔍 SEARCH FILTER
-    if query:
-        keywords = query.lower().split()
-        filter_query["file_name"] = {
-            "$regex": ".*".join(keywords),
-            "$options": "i"
-        }
-
-    # ✅ TOTAL COUNT
-    total = col.count_documents(filter_query)
-
-    # ✅ PROPER PAGINATION (NO DATA LOSS)
-    cursor = col.find(filter_query).sort("_id", -1).skip(offset).limit(max_results)
-    files = list(cursor)
-
-    next_offset = "" if (offset + max_results) >= total else (offset + max_results)
+    next_offset = "" if (offset + max_results) >= total else offset + max_results
 
     return files, next_offset, total
 
 
-# ✅ REQUIRED FOR APPROVE
 async def get_bad_files(query, file_type=None, use_filter=False):
+    query = query.strip()
+    regex = re.compile(query, re.IGNORECASE)
 
-    query = str(query).strip()
+    filter_criteria = {'file_name': regex}
 
-    filter_query = {}
+    if USE_CAPTION_FILTER:
+        filter_criteria = {'$or': [filter_criteria, {'caption': regex}]}
 
-    if query:
-        keywords = query.lower().split()
-        filter_query["file_name"] = {
-            "$regex": ".*".join(keywords),
-            "$options": "i"
-        }
+    files = list(col.find(filter_criteria))
+    if MULTIPLE_DATABASE:
+        files += list(sec_col.find(filter_criteria))
 
-    files = list(col.find(filter_query))
-
-    # REMOVE DUPLICATES
-    seen = set()
-    unique = []
-    for f in files:
-        if f['file_id'] not in seen:
-            seen.add(f['file_id'])
-            unique.append(f)
-
-    # SORT LATEST
-    unique = sorted(unique, key=lambda x: x["_id"].generation_time, reverse=True)
-
-    return unique, len(unique)
+    return files, len(files)
 
 
-# ✅ GET FILE DETAILS
 async def get_file_details(query):
-    return col.find_one({'file_id': query})
+    return col.find_one({'file_id': query}) or sec_col.find_one({'file_id': query})
 
 
-# ✅ ENCODE FILE ID
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -143,7 +180,6 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
-# ✅ DECODE FILE ID
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     return encode_file_id(
