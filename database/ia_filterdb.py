@@ -13,8 +13,8 @@ from info import FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
-sec_col = col  # 🔥 IMPORTANT FIX
-
+sec_col = col   # already added
+sec_db = db     # 🔥 ADD THIS NOW
 # ✅ SAVE FILE
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
