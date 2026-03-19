@@ -8,6 +8,8 @@ from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
+from functools import lru_cache
+from time import time
 
 # First Database For File Saving 
 client = MongoClient(FILE_DB_URI)
@@ -18,6 +20,10 @@ col = db[COLLECTION_NAME]
 sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
+
+# Simple cache for search results
+search_cache = {}
+CACHE_DURATION = 300  # 5 minutes cache
 
 async def save_file(media):
     """Save file in the database."""
@@ -38,6 +44,8 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
+        # Clear cache when new files added
+        search_cache.clear()
         print(f"{file_name} is successfully saved.")
         return True, 1
     except DuplicateKeyError:
@@ -47,6 +55,8 @@ async def save_file(media):
         if MULTIPLE_DATABASE:
             try:
                 sec_col.insert_one(file)
+                # Clear cache when new files added
+                search_cache.clear()
                 print(f"{file_name} is successfully saved.")
                 return True, 1
             except DuplicateKeyError:
@@ -78,9 +88,16 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """ULTRA-FAST search using MongoDB text search with AND operator for multiple keywords"""
+    """ULTRA-FAST search with caching - now under 1 second for repeated queries"""
     
     query = query.strip()
+    cache_key = f"{query}_{offset}_{max_results}_{MULTIPLE_DATABASE}"
+    
+    # Check cache first (for repeated searches)
+    if cache_key in search_cache:
+        cached_time, cached_results = search_cache[cache_key]
+        if time() - cached_time < CACHE_DURATION:
+            return cached_results
     
     if not query:
         # Return recent files with estimated count (fastest)
@@ -100,36 +117,46 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             total_results = col.estimated_document_count()
         
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-        return files, next_offset, total_results
+        results = (files, next_offset, total_results)
+        
+        # Cache the results
+        search_cache[cache_key] = (time(), results)
+        return results
 
     # FAST TEXT SEARCH - using MongoDB's text index
     # Split query into keywords
     keywords = query.lower().split()
     
     # Create text search query that REQUIRES all keywords
-    # Using double quotes makes each keyword required
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
-    # Use text search with relevance scoring
+    # Use text search with relevance scoring and limit results
     if MULTIPLE_DATABASE:
-        # Search in first database
+        # Search in first database with limit to reduce data transfer
         cursor1 = col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
-        # Search in second database
+        # Search in second database with limit
         cursor2 = sec_col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
-        # Combine results
-        files = list(cursor1) + list(cursor2)
+        # Combine results efficiently
+        files1 = list(cursor1)
+        files2 = list(cursor2)
+        files = files1 + files2
         
-        # Get total count (fast with text index)
-        total_results = col.count_documents({'$text': {'$search': text_query}}) + \
-                       sec_col.count_documents({'$text': {'$search': text_query}})
+        # Get total count (fast with text index) - only if needed for pagination
+        if offset == 0 and len(files) < max_results:
+            # If we got fewer results than requested, we need total count
+            total_results = col.count_documents({'$text': {'$search': text_query}}) + \
+                           sec_col.count_documents({'$text': {'$search': text_query}})
+        else:
+            # Otherwise estimate based on what we got
+            total_results = max(len(files), offset + max_results + 1)
     else:
         # Single database search
         cursor = col.find(
@@ -138,58 +165,76 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
         files = list(cursor)
-        total_results = col.count_documents({'$text': {'$search': text_query}})
+        
+        if offset == 0 and len(files) < max_results:
+            total_results = col.count_documents({'$text': {'$search': text_query}})
+        else:
+            total_results = max(len(files), offset + max_results + 1)
     
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-    return files, next_offset, total_results
+    results = (files, next_offset, total_results)
+    
+    # Cache the results
+    search_cache[cache_key] = (time(), results)
+    return results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
-    """ULTRA-FAST version for getting all files matching query"""
+    """ULTRA-FAST version with caching for getting all files matching query"""
     query = query.strip()
+    cache_key = f"bad_{query}_{MULTIPLE_DATABASE}_{USE_CAPTION_FILTER}"
+    
+    # Check cache first
+    if cache_key in search_cache:
+        cached_time, cached_results = search_cache[cache_key]
+        if time() - cached_time < CACHE_DURATION:
+            return cached_results
 
     if not query:
         # Return all files with estimated count
         if MULTIPLE_DATABASE:
-            files = list(col.find({})) + list(sec_col.find({}))
-            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+            # Limit to prevent memory issues
+            files = list(col.find({}).limit(1000)) + list(sec_col.find({}).limit(1000))
+            total_results = min(1000, col.estimated_document_count() + sec_col.estimated_document_count())
         else:
-            files = list(col.find({}))
-            total_results = col.estimated_document_count()
-        return files, total_results
+            files = list(col.find({}).limit(1000))
+            total_results = min(1000, col.estimated_document_count())
+        
+        results = (files, total_results)
+        search_cache[cache_key] = (time(), results)
+        return results
 
     # Use text search for fast results
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
     if MULTIPLE_DATABASE:
-        # Search both databases
-        files = list(col.find({'$text': {'$search': text_query}})) + \
-                list(sec_col.find({'$text': {'$search': text_query}}))
+        # Search both databases with limits
+        files = list(col.find({'$text': {'$search': text_query}}).limit(500)) + \
+                list(sec_col.find({'$text': {'$search': text_query}}).limit(500))
         
-        total_results = col.count_documents({'$text': {'$search': text_query}}) + \
-                       sec_col.count_documents({'$text': {'$search': text_query}})
+        total_results = len(files)
         
-        if USE_CAPTION_FILTER:
-            # Also search in captions if enabled
-            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}})) + \
-                           list(sec_col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
+        if USE_CAPTION_FILTER and total_results < 200:
+            # Only search captions if we have few results
+            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}}).limit(200)) + \
+                           list(sec_col.find({'caption': {'$regex': text_query, '$options': 'i'}}).limit(200))
             files.extend(caption_files)
-            # Remove duplicates while preserving order
+            # Remove duplicates efficiently
             seen = set()
             unique_files = []
             for f in files:
                 if f['file_id'] not in seen:
                     seen.add(f['file_id'])
                     unique_files.append(f)
-            files = unique_files
+            files = unique_files[:500]  # Limit total results
             total_results = len(files)
     else:
         # Single database search
-        files = list(col.find({'$text': {'$search': text_query}}))
-        total_results = col.count_documents({'$text': {'$search': text_query}})
+        files = list(col.find({'$text': {'$search': text_query}}).limit(500))
+        total_results = len(files)
         
-        if USE_CAPTION_FILTER:
-            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
+        if USE_CAPTION_FILTER and total_results < 200:
+            caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}}).limit(200))
             files.extend(caption_files)
             # Remove duplicates
             seen = set()
@@ -198,16 +243,28 @@ async def get_bad_files(query, file_type=None, use_filter=False):
                 if f['file_id'] not in seen:
                     seen.add(f['file_id'])
                     unique_files.append(f)
-            files = unique_files
+            files = unique_files[:500]
             total_results = len(files)
 
-    return files, total_results
+    results = (files, total_results)
+    search_cache[cache_key] = (time(), results)
+    return results
 
 async def get_file_details(query):
-    """Get file details by file_id"""
+    """Get file details by file_id - with simple cache"""
+    cache_key = f"file_{query}"
+    
+    if cache_key in search_cache:
+        cached_time, cached_result = search_cache[cache_key]
+        if time() - cached_time < CACHE_DURATION * 2:  # Longer cache for file details
+            return cached_result
+    
     result = col.find_one({'file_id': query})
     if not result and MULTIPLE_DATABASE:
         result = sec_col.find_one({'file_id': query})
+    
+    if result:
+        search_cache[cache_key] = (time(), result)
     return result
 
 def encode_file_id(s: bytes) -> str:
@@ -236,3 +293,10 @@ def unpack_new_file_id(new_file_id):
         )
     )
     return file_id
+
+# Function to clear cache manually if needed
+def clear_cache():
+    """Clear the search cache"""
+    global search_cache
+    search_cache.clear()
+    print("🧹 Cache cleared!")
