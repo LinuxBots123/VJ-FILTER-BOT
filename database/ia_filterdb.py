@@ -19,14 +19,13 @@ sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
-
 async def save_file(media):
     """Save file in the database."""
-    
+
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
     new_file_name = f"@VJ_Bots {file_name}"
-    
+
     file = {
         'file_id': file_id,
         'file_name': new_file_name,
@@ -60,10 +59,10 @@ def clean_file_name(file_name):
     """Clean and format the file name."""
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name)) 
     unwanted_chars = ['[', ']', '(', ')', '{', '}']
-    
+
     for char in unwanted_chars:
         file_name = file_name.replace(char, '')
-        
+
     return ' '.join(filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'), file_name.split()))
 
 def is_file_already_saved(file_id, file_name):
@@ -75,63 +74,118 @@ def is_file_already_saved(file_id, file_name):
         if collection.find_one(found1) or collection.find_one(found):
             print(f"{file_name} is already saved.")
             return True
-            
+
     return False
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """For given query return (results, next_offset)"""
-    
+    """For given query return (results, next_offset) - Modified to match ALL keywords"""
+
     query = query.strip()
     if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
+        # If no query, return recent files
+        filter = {}
+        files = []
+        if MULTIPLE_DATABASE:
+            cursor1 = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
+            cursor2 = sec_col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
+            for file in cursor1:
+                files.append(file)
+            for file in cursor2:
+                files.append(file)
+            total_results = col.count_documents(filter) + sec_col.count_documents(filter)
+        else:
+            cursor = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
+            for file in cursor:
+                files.append(file)
+            total_results = col.count_documents(filter)
+        
+        next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
+        return files, next_offset, total_results
+
+    # Split the query into individual keywords
+    keywords = query.lower().split()
+    
+    # Build a filter that requires ALL keywords to be present in the file_name
+    if len(keywords) == 1:
+        # Single keyword - use regex pattern
+        raw_pattern = r'(\b|[\.\+\-_])' + keywords[0] + r'(\b|[\.\+\-_])'
+        try:
+            regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+        except:
+            regex = keywords[0]
+        filter = {'file_name': regex}
     else:
-        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]') 
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
-        regex = query
-    filter = {'file_name': regex}
+        # Multiple keywords - require ALL of them
+        # Create a list of conditions - each keyword must appear in the file_name
+        and_conditions = []
+        for keyword in keywords:
+            # Create pattern for each keyword
+            pattern = r'{}'.format(re.escape(keyword))
+            and_conditions.append({'file_name': {'$regex': pattern, '$options': 'i'}})
+        
+        # Combine with $and operator
+        filter = {'$and': and_conditions}
+    
     files = []
     if MULTIPLE_DATABASE:
         cursor1 = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
         cursor2 = sec_col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
-        
+
         for file in cursor1:
             files.append(file)
         for file in cursor2:
             files.append(file)
+        
+        # Get total count across both databases
+        total_results = col.count_documents(filter) + sec_col.count_documents(filter)
     else:
         cursor = col.find(filter).sort('$natural', -1).skip(offset).limit(max_results)
-        
+
         for file in cursor:
             files.append(file)
+        
+        total_results = col.count_documents(filter)
 
-    total_results = col.count_documents(filter) if not MULTIPLE_DATABASE else (col.count_documents(filter) + sec_col.count_documents(filter))
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
 
     return files, next_offset, total_results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
-    """For given query return (results, next_offset)"""
+    """For given query return files - Modified to match ALL keywords"""
     query = query.strip()
-    
+
     if not query:
         raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = rf'(\b|[.+-_]){query}(\b|[.+-_])'
+        filter_criteria = {'file_name': {'$regex': raw_pattern, '$options': 'i'}}
     else:
-        raw_pattern = query.replace(' ', r'.*[s.+-_]')
-    
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except re.error:
-        return [], 0
+        # Split into keywords and require ALL
+        keywords = query.lower().split()
+        
+        if len(keywords) == 1:
+            raw_pattern = rf'(\b|[.+-_]){keywords[0]}(\b|[.+-_])'
+            filter_criteria = {'file_name': {'$regex': raw_pattern, '$options': 'i'}}
+        else:
+            # Create AND conditions for multiple keywords
+            and_conditions = []
+            for keyword in keywords:
+                pattern = r'{}'.format(re.escape(keyword))
+                and_conditions.append({'file_name': {'$regex': pattern, '$options': 'i'}})
+            
+            filter_criteria = {'$and': and_conditions}
 
-    filter_criteria = {'file_name': regex}
     if USE_CAPTION_FILTER:
-        filter_criteria = {'$or': [filter_criteria, {'caption': regex}]}
+        # Also search in captions with same AND logic
+        if '$and' in filter_criteria:
+            # For multiple keywords, create caption AND conditions too
+            caption_and = []
+            for condition in filter_criteria['$and']:
+                keyword = condition['file_name']['$regex']
+                caption_and.append({'caption': {'$regex': keyword, '$options': 'i'}})
+            filter_criteria = {'$or': [filter_criteria, {'$and': caption_and}]}
+        else:
+            # For single keyword
+            keyword = filter_criteria['file_name']['$regex']
+            filter_criteria = {'$or': [filter_criteria, {'caption': {'$regex': keyword, '$options': 'i'}}]}
 
     def count_documents(collection):
         return collection.count_documents(filter_criteria)
@@ -160,7 +214,7 @@ def encode_file_id(s: bytes) -> str:
                 n = 0
             r += bytes([i])
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
-    
+
 def unpack_new_file_id(new_file_id):
     """Return file_id"""
     decoded = FileId.decode(new_file_id)
@@ -174,4 +228,3 @@ def unpack_new_file_id(new_file_id):
         )
     )
     return file_id
-    
