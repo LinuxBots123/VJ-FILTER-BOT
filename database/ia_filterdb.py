@@ -13,7 +13,7 @@ from info import FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, USE_CAPTION_FILTER
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
-
+sec_col = col  # 🔥 IMPORTANT FIX
 
 # ✅ SAVE FILE
 async def save_file(media):
