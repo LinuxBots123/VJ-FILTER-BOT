@@ -20,6 +20,7 @@ sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
 
+# ✅ SAVE FILE
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
@@ -36,7 +37,7 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
-        print(f"{file_name} is successfully saved.")
+        print(f"{file_name} saved.")
         return True, 1
     except DuplicateKeyError:
         return False, 0
@@ -51,6 +52,7 @@ async def save_file(media):
             print("Database Full!")
 
 
+# ✅ CLEAN FILE NAME
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
     unwanted_chars = ['[', ']', '(', ')', '{', '}']
@@ -63,6 +65,7 @@ def clean_file_name(file_name):
     )
 
 
+# ✅ CHECK DUPLICATE
 def is_file_already_saved(file_id, file_name):
     found1 = {'file_name': file_name}
     found = {'file_id': file_id}
@@ -70,68 +73,47 @@ def is_file_already_saved(file_id, file_name):
     for collection in [col, sec_col]:
         if collection.find_one(found1) or collection.find_one(found):
             return True
-
     return False
 
 
-# 🔥🔥🔥 MAIN FIX HERE
+# 🔥 MAIN SEARCH FUNCTION
 async def get_search_results(query, file_type=None, max_results=10, offset=0, filter=False):
-    """FAST + LATEST SORTED SEARCH"""
 
     query = query.strip()
 
-    # ✅ 1. SHOW LATEST FILES WHEN NO QUERY
+    # ✅ SHOW LATEST FILES
     if not query:
-        filter_criteria = {}
-
         if MULTIPLE_DATABASE:
-            files1 = list(col.find(filter_criteria).sort("_id", -1).skip(offset).limit(max_results))
-            files2 = list(sec_col.find(filter_criteria).sort("_id", -1).skip(offset).limit(max_results))
+            files1 = list(col.find({}).sort("_id", -1).skip(offset).limit(max_results))
+            files2 = list(sec_col.find({}).sort("_id", -1).skip(offset).limit(max_results))
 
             files = files1 + files2
             files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
 
             total_results = col.estimated_document_count() + sec_col.estimated_document_count()
         else:
-            cursor = col.find(filter_criteria).sort("_id", -1).skip(offset).limit(max_results)
-            files = list(cursor)
+            files = list(col.find({}).sort("_id", -1).skip(offset).limit(max_results))
             total_results = col.estimated_document_count()
 
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
 
-    # ✅ 2. TEXT SEARCH (KEEP YOUR ORIGINAL SPEED)
+    # ✅ TEXT SEARCH
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
 
     if MULTIPLE_DATABASE:
-        cursor1 = col.find(
-            {'$text': {'$search': text_query}},
-            {'score': {'$meta': 'textScore'}}
-        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+        files = list(col.find({'$text': {'$search': text_query}})) + \
+                list(sec_col.find({'$text': {'$search': text_query}}))
 
-        cursor2 = sec_col.find(
-            {'$text': {'$search': text_query}},
-            {'score': {'$meta': 'textScore'}}
-        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
-
-        files = list(cursor1) + list(cursor2)
-
-        # 🔥 SORT AGAIN BY LATEST (IMPORTANT)
         files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
 
         total_results = col.count_documents({'$text': {'$search': text_query}}) + \
                         sec_col.count_documents({'$text': {'$search': text_query}})
     else:
-        cursor = col.find(
-            {'$text': {'$search': text_query}},
-            {'score': {'$meta': 'textScore'}}
-        ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
+        files = list(col.find({'$text': {'$search': text_query}}))
 
-        files = list(cursor)
-
-        # 🔥 SORT BY LATEST
-        files = sorted(files, key=lambda x: x["_id"], reverse=True)
+        files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
 
         total_results = col.count_documents({'$text': {'$search': text_query}})
 
@@ -139,6 +121,45 @@ async def get_search_results(query, file_type=None, max_results=10, offset=0, fi
     return files, next_offset, total_results
 
 
+# 🔥 FIXED FUNCTION (FOR APPROVE PLUGIN)
+async def get_bad_files(query, file_type=None, use_filter=False):
+
+    query = query.strip()
+
+    # ✅ NO QUERY → LATEST
+    if not query:
+        if MULTIPLE_DATABASE:
+            files = list(col.find({}).sort("_id", -1)) + list(sec_col.find({}).sort("_id", -1))
+        else:
+            files = list(col.find({}).sort("_id", -1))
+
+        return files, len(files)
+
+    # ✅ SEARCH
+    keywords = query.lower().split()
+    text_query = ' '.join([f'"{kw}"' for kw in keywords])
+
+    if MULTIPLE_DATABASE:
+        files = list(col.find({'$text': {'$search': text_query}})) + \
+                list(sec_col.find({'$text': {'$search': text_query}}))
+    else:
+        files = list(col.find({'$text': {'$search': text_query}}))
+
+    # ✅ REMOVE DUPLICATES
+    seen = set()
+    unique_files = []
+    for f in files:
+        if f['file_id'] not in seen:
+            seen.add(f['file_id'])
+            unique_files.append(f)
+
+    # ✅ SORT LATEST
+    unique_files = sorted(unique_files, key=lambda x: x["_id"], reverse=True)
+
+    return unique_files, len(unique_files)
+
+
+# ✅ GET FILE DETAILS
 async def get_file_details(query):
     result = col.find_one({'file_id': query})
     if not result and MULTIPLE_DATABASE:
@@ -146,6 +167,7 @@ async def get_file_details(query):
     return result
 
 
+# ✅ FILE ID ENCODE
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -160,6 +182,7 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
+# ✅ FILE ID DECODE
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     file_id = encode_file_id(
