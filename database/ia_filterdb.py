@@ -24,7 +24,8 @@ async def save_file(media):
 
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
-    new_file_name = f"@VJ_Bots {file_name}"
+    # Removed @VJ_Bots prefix - now using clean filename directly
+    new_file_name = file_name
 
     file = {
         'file_id': file_id,
