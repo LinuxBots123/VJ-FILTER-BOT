@@ -4,6 +4,7 @@
 
 import re, base64, json
 from struct import pack
+from datetime import datetime
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
@@ -29,7 +30,8 @@ async def save_file(media):
         'file_id': file_id,
         'file_name': file_name,
         'file_size': media.file_size,
-        'caption': media.caption.html if media.caption else None
+        'caption': media.caption.html if media.caption else None,
+        'created_at': datetime.utcnow()  # 🔥 NEW (for perfect sorting)
     }
 
     if is_file_already_saved(file_id, file_name):
@@ -76,16 +78,15 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🔥🔥🔥 FIXED UNIVERSAL SEARCH FUNCTION
+# 🔥🔥🔥 FINAL UNIVERSAL SEARCH (SYNC FIXED)
 async def get_search_results(*args, file_type=None, max_results=10, offset=0, filter=False):
 
-    # ✅ SUPPORT BOTH CALL TYPES
+    # ✅ HANDLE BOTH CALL TYPES
     if len(args) == 2:
         chat_id, query = args
     else:
         query = args[0]
 
-    # 🛡️ FIX ERROR (int → string)
     if isinstance(query, int):
         query = ""
 
@@ -94,16 +95,19 @@ async def get_search_results(*args, file_type=None, max_results=10, offset=0, fi
     # ✅ SHOW LATEST FILES
     if not query:
         if MULTIPLE_DATABASE:
-            files1 = list(col.find({}).sort("_id", -1).skip(offset).limit(max_results))
-            files2 = list(sec_col.find({}).sort("_id", -1).skip(offset).limit(max_results))
-
-            files = files1 + files2
-            files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
-
-            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+            files = list(col.find({})) + list(sec_col.find({}))
         else:
-            files = list(col.find({}).sort("_id", -1).skip(offset).limit(max_results))
-            total_results = col.estimated_document_count()
+            files = list(col.find({}))
+
+        # 🔥 FIXED SORT (REAL TIME)
+        files = sorted(
+            files,
+            key=lambda x: x.get("created_at", x["_id"].generation_time),
+            reverse=True
+        )
+
+        total_results = len(files)
+        files = files[offset: offset + max_results]
 
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
@@ -115,32 +119,39 @@ async def get_search_results(*args, file_type=None, max_results=10, offset=0, fi
     if MULTIPLE_DATABASE:
         files = list(col.find({'$text': {'$search': text_query}})) + \
                 list(sec_col.find({'$text': {'$search': text_query}}))
-
-        files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
-
-        total_results = col.count_documents({'$text': {'$search': text_query}}) + \
-                        sec_col.count_documents({'$text': {'$search': text_query}})
     else:
         files = list(col.find({'$text': {'$search': text_query}}))
 
-        files = sorted(files, key=lambda x: x["_id"], reverse=True)[:max_results]
+    # 🔥 FIXED SORT
+    files = sorted(
+        files,
+        key=lambda x: x.get("created_at", x["_id"].generation_time),
+        reverse=True
+    )
 
-        total_results = col.count_documents({'$text': {'$search': text_query}})
+    total_results = len(files)
+    files = files[offset: offset + max_results]
 
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
     return files, next_offset, total_results
 
 
-# ✅ REQUIRED FOR APPROVE PLUGIN
+# ✅ REQUIRED FOR APPROVE
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = str(query).strip()
 
     if not query:
         if MULTIPLE_DATABASE:
-            files = list(col.find({}).sort("_id", -1)) + list(sec_col.find({}).sort("_id", -1))
+            files = list(col.find({})) + list(sec_col.find({}))
         else:
-            files = list(col.find({}).sort("_id", -1))
+            files = list(col.find({}))
+
+        files = sorted(
+            files,
+            key=lambda x: x.get("created_at", x["_id"].generation_time),
+            reverse=True
+        )
 
         return files, len(files)
 
@@ -153,6 +164,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     else:
         files = list(col.find({'$text': {'$search': text_query}}))
 
+    # REMOVE DUPLICATES
     seen = set()
     unique_files = []
     for f in files:
@@ -160,7 +172,12 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             seen.add(f['file_id'])
             unique_files.append(f)
 
-    unique_files = sorted(unique_files, key=lambda x: x["_id"], reverse=True)
+    # 🔥 SORT FIXED
+    unique_files = sorted(
+        unique_files,
+        key=lambda x: x.get("created_at", x["_id"].generation_time),
+        reverse=True
+    )
 
     return unique_files, len(unique_files)
 
@@ -173,7 +190,7 @@ async def get_file_details(query):
     return result
 
 
-# ✅ ENCODE FILE ID
+# ✅ ENCODE
 def encode_file_id(s: bytes) -> str:
     r = b""
     n = 0
@@ -188,7 +205,7 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 
-# ✅ DECODE FILE ID
+# ✅ DECODE
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     file_id = encode_file_id(
