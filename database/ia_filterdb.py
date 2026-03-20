@@ -21,50 +21,63 @@ sec_col = sec_db[COLLECTION_NAME]
 
 
 async def save_file(media):
-    """Save file in the database."""
-
-    file_id = unpack_new_file_id(media.file_id)
-    file_name = clean_file_name(media.file_name)
-    new_file_name = f"@VJ_Bots {file_name}"
-
-    file = {
-        'file_id': file_id,
-        'file_name': new_file_name,
-        'file_size': media.file_size,
-        'caption': media.caption.html if media.caption else None
-    }
-
-    if is_file_already_saved(file_id, file_name):
-        return False, 0
-
+    """Save file in the database - WITHOUT @VJ_Bots prefix"""
     try:
-        col.insert_one(file)
-        print(f"{file_name} is successfully saved.")
-        return True, 1
-    except DuplicateKeyError:
-        print(f"{file_name} is already saved.")
-        return False, 0
-    except:
-        if MULTIPLE_DATABASE:
-            try:
-                sec_col.insert_one(file)
-                print(f"{file_name} is successfully saved.")
-                return True, 1
-            except DuplicateKeyError:
-                print(f"{file_name} is already saved.")
-                return False, 0
-        else:
-            print("Database Full! Enable MULTIPLE_DATABASE.")
+        file_id = unpack_new_file_id(media.file_id)
+        file_name = clean_file_name(media.file_name)
+        
+        # REMOVED: f"@VJ_Bots {file_name}" - now saving without prefix
+        new_file_name = file_name  # Save with cleaned name only, no prefix
+
+        file = {
+            'file_id': file_id,
+            'file_name': new_file_name,
+            'file_size': media.file_size,
+            'caption': media.caption.html if media.caption else None
+        }
+
+        if is_file_already_saved(file_id, file_name):
             return False, 0
+
+        try:
+            col.insert_one(file)
+            print(f"✅ {file_name} is successfully saved.")
+            return True, 1
+        except DuplicateKeyError:
+            print(f"⏭️ {file_name} is already saved.")
+            return False, 0
+        except Exception as e:
+            print(f"❌ Error in first DB: {e}")
+            if MULTIPLE_DATABASE:
+                try:
+                    sec_col.insert_one(file)
+                    print(f"✅ {file_name} is successfully saved in second DB.")
+                    return True, 1
+                except DuplicateKeyError:
+                    print(f"⏭️ {file_name} is already saved in second DB.")
+                    return False, 0
+                except Exception as e2:
+                    print(f"❌ Error in second DB: {e2}")
+                    return False, 2
+            else:
+                print("Database Full! Enable MULTIPLE_DATABASE.")
+                return False, 2
+    except Exception as e:
+        print(f"❌ Critical error in save_file: {e}")
+        return False, 2
 
 
 def clean_file_name(file_name):
+    if not file_name:
+        return "Unknown"
+    
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
     unwanted_chars = ['[', ']', '(', ')', '{', '}']
 
     for char in unwanted_chars:
         file_name = file_name.replace(char, '')
 
+    # Remove any existing @ mentions but keep the rest of the name
     return ' '.join(
         x for x in file_name.split()
         if not x.startswith('@')
@@ -80,7 +93,7 @@ def is_file_already_saved(file_id, file_name):
 
     for collection in [col, sec_col]:
         if collection.find_one(found1) or collection.find_one(found):
-            print(f"{file_name} already exists.")
+            print(f"⏭️ {file_name} already exists.")
             return True
 
     return False
@@ -206,4 +219,4 @@ def unpack_new_file_id(new_file_id):
             decoded.media_id,
             decoded.access_hash
         )
-            )
+    )
