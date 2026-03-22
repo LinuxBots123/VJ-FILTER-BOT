@@ -99,7 +99,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🔥 FAST SEARCH (FIXED - WITH WORD BOUNDARIES)
+# 🔥 FAST SEARCH (FIXED - WITH IMPROVED SEARCH LOGIC)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip()
@@ -127,17 +127,18 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         next_offset = "" if (offset + max_results) >= total else offset + max_results
         return files, next_offset, total
 
-    # 🚀 FIXED TEXT SEARCH - USING PHRASE MATCHING
+    # 🚀 IMPROVED TEXT SEARCH - FLEXIBLE MATCHING WITH AND LOGIC
     # Split query into keywords
     keywords = query.lower().split()
     
+    # Build search string with AND operator for multiple keywords
+    # Using quotes for exact word matching but not strict phrase matching
     if len(keywords) == 1:
-        # Single keyword - use text search but ensure it's a whole word
-        # The \" makes it a phrase search
-        search_string = f'"{keywords[0]}"'
+        # Single keyword - search for the word
+        search_string = keywords[0]
     else:
-        # Multiple keywords - require ALL as whole words
-        # This creates: "keyword1" "keyword2" "keyword3"
+        # Multiple keywords - use AND operator to require all words
+        # Format: "word1" "word2" "word3"
         search_string = ' '.join([f'"{kw}"' for kw in keywords])
     
     filter_query = {"$text": {"$search": search_string}}
