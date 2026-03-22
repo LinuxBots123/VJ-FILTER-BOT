@@ -1500,5 +1500,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                         'file_id': file_ids,
                     })
                     if not result.deleted_count:
-                        result = sec_col.delete_one({
-                            'file_id': file_ids,
+    result = sec_col.delete_one({
+        'file_id': file_ids,
+    })  # ← Add this closing brace
