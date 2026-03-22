@@ -11,7 +11,6 @@ from pyrogram import Client, filters, enums
 from pyrogram.errors import FloodWait, UserIsBlocked, MessageNotModified, PeerIdInvalid
 from pyrogram.errors.exceptions.bad_request_400 import MediaEmpty, PhotoInvalidDimensions, WebpageMediaEmpty
 from utils import get_size, is_subscribed, pub_is_subscribed, get_poster, search_gagala, temp, get_settings, save_group_settings, get_shortlink, get_tutorial, send_all, get_cap
-from plugins.auto_filter import auto_filter, manual_filters, global_filters
 from database.users_chats_db import db
 from database.ia_filterdb import col, sec_col, db as vjdb, sec_db, get_file_details, get_search_results, get_bad_files
 from database.filters_mdb import del_all, find_filter, get_filters
@@ -1498,3 +1497,101 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 await query.message.edit_text(f"<b>Successfully deleted {deleted} files for query: {keyword}</b>")
             except Exception as e:
                 await query.message.edit_text(f"<b>Error: {e}</b>")
+# Add these functions at the end of pm_filter.py
+
+async def auto_filter(client, query, message, reply_msg, ai_search, k=None):
+    """Auto filter function - searches and displays files"""
+    try:
+        if k:
+            movie, files, offset, total_results = k
+        else:
+            files, offset, total_results = await get_search_results(message.chat.id, query, offset=0, filter=True)
+            movie = query
+        
+        if not files:
+            await reply_msg.edit(script.MVE_NT_FND)
+            await asyncio.sleep(10)
+            await reply_msg.delete()
+            return
+        
+        settings = await get_settings(message.chat.id)
+        pre = 'filep' if settings['file_secure'] else 'file'
+        
+        # Generate unique key for this search
+        key = f"{message.chat.id}_{message.id}"
+        FRESH[key] = movie
+        
+        btn = []
+        for file in files:
+            btn.append([
+                InlineKeyboardButton(
+                    text=f"[{get_size(file['file_size'])}] {file['file_name'][:40]}",
+                    callback_data=f'{pre}#{file["file_id"]}'
+                )
+            ])
+        
+        # Add filter buttons
+        btn.insert(0, [
+            InlineKeyboardButton("🎬 Send All", callback_data=f"send_fall#{key}#0"),
+            InlineKeyboardButton("🎭 Languages", callback_data=f"languages#{key}"),
+            InlineKeyboardButton("📅 Years", callback_data=f"years#{key}")
+        ])
+        btn.insert(1, [
+            InlineKeyboardButton("🎞️ Qualities", callback_data=f"qualities#{key}"),
+            InlineKeyboardButton("📺 Episodes", callback_data=f"episodes#{key}"),
+            InlineKeyboardButton("🔢 Seasons", callback_data=f"seasons#{key}")
+        ])
+        
+        if offset:
+            btn.append([InlineKeyboardButton("➡️ Next", callback_data=f"next_0_{key}_{offset}")])
+        
+        await reply_msg.edit_text(
+            f"<b>🎬 Found {total_results} results for: {movie}</b>",
+            reply_markup=InlineKeyboardMarkup(btn)
+        )
+        
+    except Exception as e:
+        logger.error(f"Auto filter error: {e}")
+        await reply_msg.edit("An error occurred while searching.")
+
+
+async def manual_filters(client, message, text=None):
+    """Manual filters function"""
+    try:
+        filters = await get_filters(message.chat.id)
+        if not filters:
+            return False
+        
+        search_text = text or message.text
+        for filter_data in filters:
+            if filter_data['keyword'].lower() in search_text.lower():
+                await message.reply_text(
+                    filter_data['reply_text'],
+                    reply_markup=filter_data.get('reply_markup')
+                )
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Manual filters error: {e}")
+        return False
+
+
+async def global_filters(client, message, text=None):
+    """Global filters function"""
+    try:
+        filters = await get_gfilters()
+        if not filters:
+            return False
+        
+        search_text = text or message.text
+        for filter_data in filters:
+            if filter_data['keyword'].lower() in search_text.lower():
+                await message.reply_text(
+                    filter_data['reply_text'],
+                    reply_markup=filter_data.get('reply_markup')
+                )
+                return True
+        return False
+    except Exception as e:
+        logger.error(f"Global filters error: {e}")
+        return False
