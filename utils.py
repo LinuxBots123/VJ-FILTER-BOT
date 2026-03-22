@@ -4,7 +4,7 @@
 
 import logging, asyncio, os, re, random, pytz, aiohttp, requests, string, json, http.client
 from info import *
-from imdbkit import IMDBKit
+from imdb import Cinemagoer 
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram import enums
 from pyrogram.errors import *
@@ -22,7 +22,7 @@ logger.setLevel(logging.INFO)
 join_db = JoinReqs
 BTN_URL_REGEX = re.compile(r"(\[([^\[]+?)\]\((buttonurl|buttonalert):(?:/{0,2})(.+?)(:same)?\))")
 
-imdb = IMDBKit()
+imdb = Cinemagoer() 
 TOKENS = {}
 VERIFIED = {}
 BANNED = {}
@@ -30,7 +30,6 @@ SECOND_SHORTENER = {}
 SMART_OPEN = '“'
 SMART_CLOSE = '”'
 START_CHAR = ('\'', '"', SMART_OPEN)
-MAX_LIST_ELM = 10  # Set maximum items for list display
 
 # temp db for banned 
 class temp(object):
@@ -47,6 +46,7 @@ class temp(object):
     SHORT = {}
     SETTINGS = {}
     IMDB_CAP = {}
+
 
 async def pub_is_subscribed(bot, query, channel):
     btn = []
@@ -93,126 +93,84 @@ async def is_subscribed(bot, query):
                 return True
         return False
 
-def listx_to_str(k):
-    """Convert list/iterable to string with proper formatting for IMDB data"""
-    if k is None or k == "":
-        return "N/A"
-    
-    # Handle non-iterable types first
-    if not hasattr(k, '__iter__') or isinstance(k, (str, int, float)):
-        return str(k)
-    
-    result = []
-    for elem in k:
-        if elem and str(elem).strip():
-            result.append(str(elem).strip())
-    
-    if MAX_LIST_ELM and len(result) > MAX_LIST_ELM:
-        result = result[:int(MAX_LIST_ELM)]
-    
-    return ', '.join(result) if result else "N/A"
-
 async def get_poster(query, bulk=False, id=False, file=None):
-    """Get movie poster and details using IMDBKit"""
     if not id:
         query = (query.strip()).lower()
         title = query
-        year_val = None
-        
-        # Extract year from query
-        year_list = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
-        if year_list:
-            year_val = year_list[0]
-            title = (query.replace(year_val, "")).strip()
+        year = re.findall(r'[1-2]\d{3}$', query, re.IGNORECASE)
+        if year:
+            year = list_to_str(year[:1])
+            title = (query.replace(year, "")).strip()
         elif file is not None:
-            year_list = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
-            if year_list:
-                year_val = year_list[0]
-        
-        # Search for movie
-        search_result = await asyncio.to_thread(imdb.search_movie, title.lower())
-        if not search_result or not search_result.titles:
-            return None
-        
-        movie_list = search_result.titles
-        
-        # Filter by year if provided
-        if year_val:
-            filtered = [m for m in movie_list if m.year and str(m.year) == str(year_val)]
-            if not filtered:
-                filtered = movie_list
+            year = re.findall(r'[1-2]\d{3}', file, re.IGNORECASE)
+            if year:
+                year = list_to_str(year[:1]) 
         else:
-            filtered = movie_list
-        
-        # Filter by kind (movie, tv series, etc.)
-        kind_filter = ['movie', 'tv series', 'tvSeries', 'tvMiniSeries', 'tvMovie']
-        filtered_kind = [m for m in filtered if m.kind and m.kind in kind_filter]
-        
-        if not filtered_kind:
-            filtered_kind = filtered
-        
-        if bulk:
-            return filtered_kind
-        
-        if not filtered_kind:
+            year = None
+        movieid = imdb.search_movie(title.lower(), results=10)
+        if not movieid:
             return None
-            
-        movie_brief = filtered_kind[0]
-        movieid_str = movie_brief.imdb_id
+        if year:
+            filtered=list(filter(lambda k: str(k.get('year')) == str(year), movieid))
+            if not filtered:
+                filtered = movieid
+        else:
+            filtered = movieid
+        movieid=list(filter(lambda k: k.get('kind') in ['movie', 'tv series'], filtered))
+        if not movieid:
+            movieid = filtered
+        if bulk:
+            return movieid
+        movieid = movieid[0].movieID
     else:
-        movieid_str = query
-
-    # Get full movie details
-    movie = await asyncio.to_thread(imdb.get_movie, movieid_str)
+        movieid = query
+    movie = imdb.get_movie(movieid)
     if not movie:
         return None
-
-    # Format release date
-    if movie.release_date:
-        date = movie.release_date
-    elif movie.year:
-        date = str(movie.year)
+    if movie.get("original air date"):
+        date = movie["original air date"]
+    elif movie.get("year"):
+        date = movie.get("year")
     else:
         date = "N/A"
-    
-    # Format plot
-    plot = movie.plot or ""
+    plot = ""
+    if not LONG_IMDB_DESCRIPTION:
+        plot = movie.get('plot')
+        if plot and len(plot) > 0:
+            plot = plot[0]
+    else:
+        plot = movie.get('plot outline')
     if plot and len(plot) > 800:
         plot = plot[0:800] + "..."
 
     return {
-        'title': movie.title,
-        'votes': movie.votes,
-        "aka": listx_to_str(movie.title_akas),
-        "seasons": (
-            len(movie.info_series.display_seasons)
-            if getattr(movie, "info_series", None)
-            and getattr(movie.info_series, "display_seasons", None)
-            else "N/A"
-        ),
-        "box_office": movie.worldwide_gross,
-        'localized_title': movie.title_localized,
-        'kind': movie.kind,
-        "imdb_id": f"tt{movie.imdb_id}",
-        "cast": listx_to_str(movie.stars),
-        "runtime": listx_to_str(movie.duration),
-        "countries": listx_to_str(movie.countries),
-        "certificates": listx_to_str(movie.certificates),
-        "languages": listx_to_str(movie.languages),
-        "director": listx_to_str(movie.directors),
-        "writer": listx_to_str([p.name for p in movie.writers]) if movie.writers else "N/A",
-        "producer": listx_to_str([p.name for p in movie.producers]) if movie.producers else "N/A",
-        "composer": listx_to_str([p.name for p in movie.composers]) if movie.composers else "N/A",
-        "cinematographer": listx_to_str([p.name for p in movie.cinematographers]) if movie.cinematographers else "N/A",
-        "music_team": listx_to_str([p.name for p in movie.music_team]) if movie.music_team else "N/A",
-        "distributors": listx_to_str([c.name for c in movie.distributors]) if movie.distributors else "N/A",
+        'title': movie.get('title'),
+        'votes': movie.get('votes'),
+        "aka": list_to_str(movie.get("akas")),
+        "seasons": movie.get("number of seasons"),
+        "box_office": movie.get('box office'),
+        'localized_title': movie.get('localized title'),
+        'kind': movie.get("kind"),
+        "imdb_id": f"tt{movie.get('imdbID')}",
+        "cast": list_to_str(movie.get("cast")),
+        "runtime": list_to_str(movie.get("runtimes")),
+        "countries": list_to_str(movie.get("countries")),
+        "certificates": list_to_str(movie.get("certificates")),
+        "languages": list_to_str(movie.get("languages")),
+        "director": list_to_str(movie.get("director")),
+        "writer":list_to_str(movie.get("writer")),
+        "producer":list_to_str(movie.get("producer")),
+        "composer":list_to_str(movie.get("composer")) ,
+        "cinematographer":list_to_str(movie.get("cinematographer")),
+        "music_team": list_to_str(movie.get("music department")),
+        "distributors": list_to_str(movie.get("distributors")),
         'release_date': date,
-        'year': movie.year,
-        'genres': listx_to_str(movie.genres),
-        'poster': movie.cover_url,
+        'year': movie.get('year'),
+        'genres': list_to_str(movie.get("genres")),
+        'poster': movie.get('full-size cover url'),
         'plot': plot,
-        'rating': str(movie.rating) if movie.rating else "N/A",
-        'url': movie.url or f'https://www.imdb.com/title/tt{movie.imdb_id}'
+        'rating': str(movie.get("rating")),
+        'url':f'https://www.imdb.com/title/tt{movieid}'
     }
 
 async def broadcast_messages(user_id, message):
@@ -250,7 +208,7 @@ async def broadcast_messages_group(chat_id, message):
         return await broadcast_messages_group(chat_id, message)
     except Exception as e:
         return False, "Error"
-
+    
 async def search_gagala(text):
     usr_agent = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -267,12 +225,12 @@ async def search_gagala(text):
 async def get_settings(group_id):
     settings = await db.get_settings(group_id)
     return settings
-
+    
 async def save_group_settings(group_id, key, value):
     current = await get_settings(group_id)
     current.update({key: value})
     await db.update_settings(group_id, current)
-
+    
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB", "PB", "EB"]
     size = float(size)
@@ -315,7 +273,7 @@ def extract_user(message: Message) -> Union[int, str]:
             len(message.entities) > 1 and
             message.entities[1].type == enums.MessageEntityType.TEXT_MENTION
         ):
-
+           
             required_entity = message.entities[1]
             user_id = required_entity.user.id
             user_first_name = required_entity.user.first_name
@@ -518,11 +476,13 @@ def humanbytes(size):
         n += 1
     return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
 
+
+
 async def get_clone_shortlink(link, url, api):
     shortzy = Shortzy(api_key=api, base_site=url)
     link = await shortzy.convert(link)
     return link
-
+                           
 async def get_shortlink(chat_id, link):
     settings = await get_settings(chat_id) #fetching settings for group
     if 'shortlink' in settings.keys():
@@ -552,11 +512,11 @@ async def get_shortlink(chat_id, link):
         shortzy = Shortzy(api_key=API, base_site=URL)
         link = await shortzy.convert(link)
         return link
-
+    
 async def get_tutorial(chat_id):
     settings = await get_settings(chat_id) #fetching settings for group
     return settings['tutorial']
-
+        
 async def get_verify_shorted_link(link, url, api):
     API = api
     URL = url
@@ -578,7 +538,7 @@ async def get_verify_shorted_link(link, url, api):
         shortzy = Shortzy(api_key=API, base_site=URL)
         link = await shortzy.convert(link)
         return link
-
+        
 async def check_token(bot, userid, token):
     user = await bot.get_users(userid)
     if not await db.is_user_exist(user.id):
@@ -637,7 +597,7 @@ async def check_verification(bot, userid):
             return True
     else:
         return False  
-
+    
 async def send_all(bot, userid, files, ident, chat_id, user_name, query):
     settings = await get_settings(chat_id)
     if 'is_shortlink' in settings.keys():
@@ -689,7 +649,7 @@ async def send_all(bot, userid, files, ident, chat_id, user_name, query):
         await query.answer('Hᴇʏ, Sᴛᴀʀᴛ Bᴏᴛ Fɪʀsᴛ Aɴᴅ Cʟɪᴄᴋ Sᴇɴᴅ Aʟʟ', show_alert=True)
     except Exception as e:
         await query.answer('Hᴇʏ, Sᴛᴀʀᴛ Bᴏᴛ Fɪʀsᴛ Aɴᴅ Cʟɪᴄᴋ Sᴇɴᴅ Aʟʟ', show_alert=True)
-
+        
 async def get_cap(settings, remaining_seconds, files, query, total_results, search):
     if settings["imdb"]:
         IMDB_CAP = temp.IMDB_CAP.get(query.from_user.id)
@@ -747,6 +707,7 @@ async def get_cap(settings, remaining_seconds, files, query, total_results, sear
         for file in files:
             cap += f"<b>📁 <a href='https://telegram.me/{temp.U_NAME}?start=files_{file['file_id']}'>[{get_size(file['file_size'])}] {' '.join(filter(lambda x: not x.startswith('[') and not x.startswith('@') and not x.startswith('www.'), file['file_name'].split()))}\n\n</a></b>"
     return cap
+
 
 async def get_seconds(time_string):
     def extract_value_and_unit(ts):
