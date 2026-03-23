@@ -9,17 +9,16 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
 
-# First Database For File Saving 
+# First Database
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
-# Second Database For File Saving
+# Second Database
 sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
-# 🔥 CACHE (speed boost)
 CACHE = {}
 
 async def save_file(media):
@@ -50,27 +49,22 @@ async def save_file(media):
             except DuplicateKeyError:
                 return False, 0
         else:
-            print("Database full")
+            print("DB Full")
 
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name)) 
-    unwanted_chars = ['[', ']', '(', ')', '{', '}']
-    
-    for char in unwanted_chars:
-        file_name = file_name.replace(char, '')
-        
-    return ' '.join(filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'), file_name.split()))
+    for c in ['[', ']', '(', ')', '{', '}']:
+        file_name = file_name.replace(c, '')
+    return ' '.join(filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.'), file_name.split()))
 
 def is_file_already_saved(file_id, file_name):
-    found1 = {'file_name': file_name}
-    found = {'file_id': file_id}
-
     for collection in [col, sec_col]:
-        if collection.find_one(found1) or collection.find_one(found):
+        if collection.find_one({'file_id': file_id}) or collection.find_one({'file_name': file_name}):
             return True
     return False
 
 
+# 🚀 FINAL BALANCED SEARCH
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
     query = query.strip().lower()
     words = query.split()
@@ -85,46 +79,37 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     files = []
 
-    def match_all_words(name):
+    def match_words(name):
         name = name.lower()
-        return all(word in name for word in words)
+        name = re.sub(r"[^\w\s]", "", name)
+        match_count = sum(1 for w in words if w in name)
+        return match_count >= max(1, len(words)//2)
 
     try:
         if MULTIPLE_DATABASE:
-            cursor1 = col.find(search_filter).skip(offset).limit(50)
-            cursor2 = sec_col.find(search_filter).skip(offset).limit(50)
-
-            for file in cursor1:
-                if match_all_words(file['file_name']):
-                    files.append(file)
-
-            for file in cursor2:
-                if match_all_words(file['file_name']):
-                    files.append(file)
-
+            cursors = list(col.find(search_filter).skip(offset).limit(50)) + \
+                      list(sec_col.find(search_filter).skip(offset).limit(50))
         else:
-            cursor = col.find(search_filter).skip(offset).limit(50)
+            cursors = list(col.find(search_filter).skip(offset).limit(50))
 
-            for file in cursor:
-                if match_all_words(file['file_name']):
-                    files.append(file)
+        for file in cursors:
+            if match_words(file['file_name']):
+                files.append(file)
 
     except:
         raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
         regex = re.compile(raw_pattern, re.IGNORECASE)
-        fallback_filter = {'file_name': regex}
+        fallback = {'file_name': regex}
 
         if MULTIPLE_DATABASE:
-            for file in col.find(fallback_filter).skip(offset).limit(50):
-                if match_all_words(file['file_name']):
-                    files.append(file)
-            for file in sec_col.find(fallback_filter).skip(offset).limit(50):
-                if match_all_words(file['file_name']):
-                    files.append(file)
+            cursors = list(col.find(fallback).skip(offset).limit(50)) + \
+                      list(sec_col.find(fallback).skip(offset).limit(50))
         else:
-            for file in col.find(fallback_filter).skip(offset).limit(50):
-                if match_all_words(file['file_name']):
-                    files.append(file)
+            cursors = list(col.find(fallback).skip(offset).limit(50))
+
+        for file in cursors:
+            if match_words(file['file_name']):
+                files.append(file)
 
     files = files[:max_results]
 
@@ -139,34 +124,16 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
 async def get_bad_files(query, file_type=None, use_filter=False):
     query = query.strip()
-    
-    if not query:
-        raw_pattern = '.'
-    elif ' ' not in query:
-        raw_pattern = rf'(\b|[.+-_]){query}(\b|[.+-_])'
-    else:
-        raw_pattern = query.replace(' ', r'.*[s.+-_]')
-    
-    try:
-        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except:
-        return [], 0
-
+    regex = re.compile(query.replace(' ', r'.*'), re.IGNORECASE)
     filter_criteria = {'file_name': regex}
     if USE_CAPTION_FILTER:
         filter_criteria = {'$or': [filter_criteria, {'caption': regex}]}
 
-    def count_documents(collection):
-        return collection.count_documents(filter_criteria)
+    files = list(col.find(filter_criteria))
+    if MULTIPLE_DATABASE:
+        files += list(sec_col.find(filter_criteria))
 
-    total_results = (count_documents(col) + count_documents(sec_col) if MULTIPLE_DATABASE else count_documents(col))
-
-    def find_documents(collection):
-        return list(collection.find(filter_criteria))
-
-    files = (find_documents(col) + find_documents(sec_col) if MULTIPLE_DATABASE else find_documents(col))
-
-    return files, total_results
+    return files, len(files)
 
 
 async def get_file_details(query):
@@ -174,28 +141,20 @@ async def get_file_details(query):
 
 
 def encode_file_id(s: bytes) -> str:
-    r = b""
-    n = 0
+    r = b""; n = 0
     for i in s + bytes([22]) + bytes([4]):
-        if i == 0:
-            n += 1
+        if i == 0: n += 1
         else:
-            if n:
-                r += b"\x00" + bytes([n])
-                n = 0
+            if n: r += b"\x00" + bytes([n]); n = 0
             r += bytes([i])
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
-    
+
 
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
-    file_id = encode_file_id(
-        pack(
-            "<iiqq",
-            int(decoded.file_type),
-            decoded.dc_id,
-            decoded.media_id,
-            decoded.access_hash
-        )
-    )
-    return file_id
+    return encode_file_id(pack("<iiqq",
+        int(decoded.file_type),
+        decoded.dc_id,
+        decoded.media_id,
+        decoded.access_hash
+    ))
