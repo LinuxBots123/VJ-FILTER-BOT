@@ -23,8 +23,6 @@ sec_col = sec_db[COLLECTION_NAME]
 CACHE = {}
 
 async def save_file(media):
-    """Save file in the database."""
-    
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
     new_file_name = f"@VJ_Bots {file_name}"
@@ -41,22 +39,18 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
-        print(f"{file_name} is successfully saved.")
         return True, 1
     except DuplicateKeyError:
-        print(f"{file_name} is already saved.")
         return False, 0
     except:
         if MULTIPLE_DATABASE:
             try:
                 sec_col.insert_one(file)
-                print(f"{file_name} is successfully saved.")
                 return True, 1
             except DuplicateKeyError:
-                print(f"{file_name} is already saved.")
                 return False, 0
         else:
-            print("Your Current File Database Is Full, Turn On Multiple Database Feature And Add Second File Mongodb To Save File.")
+            print("Database full")
 
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name)) 
@@ -73,79 +67,71 @@ def is_file_already_saved(file_id, file_name):
 
     for collection in [col, sec_col]:
         if collection.find_one(found1) or collection.find_one(found):
-            print(f"{file_name} is already saved.")
             return True
-            
     return False
 
 
-# 🚀🔥 OPTIMIZED SEARCH FUNCTION
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    query = query.strip()
+    query = query.strip().lower()
+    words = query.split()
 
-    # ⚡ CACHE CHECK
     if query in CACHE:
         return CACHE[query]
 
     if not query:
         search_filter = {}
     else:
-        search_filter = {
-            "$text": {"$search": query}
-        }
+        search_filter = {"$text": {"$search": query}}
 
     files = []
 
+    def match_all_words(name):
+        name = name.lower()
+        return all(word in name for word in words)
+
     try:
         if MULTIPLE_DATABASE:
-            cursor1 = col.find(search_filter, {"score": {"$meta": "textScore"}}) \
-                .sort([("score", {"$meta": "textScore"})]) \
-                .skip(offset).limit(max_results)
+            cursor1 = col.find(search_filter).skip(offset).limit(50)
+            cursor2 = sec_col.find(search_filter).skip(offset).limit(50)
 
-            cursor2 = sec_col.find(search_filter, {"score": {"$meta": "textScore"}}) \
-                .sort([("score", {"$meta": "textScore"})]) \
-                .skip(offset).limit(max_results)
+            for file in cursor1:
+                if match_all_words(file['file_name']):
+                    files.append(file)
 
-            files.extend(list(cursor1))
-            files.extend(list(cursor2))
+            for file in cursor2:
+                if match_all_words(file['file_name']):
+                    files.append(file)
+
         else:
-            cursor = col.find(search_filter, {"score": {"$meta": "textScore"}}) \
-                .sort([("score", {"$meta": "textScore"})]) \
-                .skip(offset).limit(max_results)
+            cursor = col.find(search_filter).skip(offset).limit(50)
 
-            files.extend(list(cursor))
+            for file in cursor:
+                if match_all_words(file['file_name']):
+                    files.append(file)
 
     except:
-        # ⚠️ fallback regex (your original logic)
-        if not query:
-            raw_pattern = '.'
-        elif ' ' not in query:
-            raw_pattern = r'(\b|[\.\+\-_])' + query + r'(\b|[\.\+\-_])'
-        else:
-            raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
-
-        try:
-            regex = re.compile(raw_pattern, re.IGNORECASE)
-        except:
-            regex = query
-
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+        regex = re.compile(raw_pattern, re.IGNORECASE)
         fallback_filter = {'file_name': regex}
 
         if MULTIPLE_DATABASE:
-            files.extend(list(col.find(fallback_filter).skip(offset).limit(max_results)))
-            files.extend(list(sec_col.find(fallback_filter).skip(offset).limit(max_results)))
+            for file in col.find(fallback_filter).skip(offset).limit(50):
+                if match_all_words(file['file_name']):
+                    files.append(file)
+            for file in sec_col.find(fallback_filter).skip(offset).limit(50):
+                if match_all_words(file['file_name']):
+                    files.append(file)
         else:
-            files.extend(list(col.find(fallback_filter).skip(offset).limit(max_results)))
+            for file in col.find(fallback_filter).skip(offset).limit(50):
+                if match_all_words(file['file_name']):
+                    files.append(file)
 
-    total_results = col.count_documents(search_filter) if not MULTIPLE_DATABASE else (
-        col.count_documents(search_filter) + sec_col.count_documents(search_filter)
-    )
+    files = files[:max_results]
 
+    total_results = len(files)
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
 
     result = (files, next_offset, total_results)
-
-    # ⚡ SAVE CACHE
     CACHE[query] = result
 
     return result
@@ -163,7 +149,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     
     try:
         regex = re.compile(raw_pattern, flags=re.IGNORECASE)
-    except re.error:
+    except:
         return [], 0
 
     filter_criteria = {'file_name': regex}
