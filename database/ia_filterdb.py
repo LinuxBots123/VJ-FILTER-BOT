@@ -190,7 +190,7 @@ async def get_search_results(chat_id: str, query: str, file_type: str = None, ma
     filter_criteria = {'file_name': regex}
     
     # Add quality filter if specified
-    if quality and quality != 'all':
+    if quality and quality != 'all' and quality != 'Unknown':
         filter_criteria['quality'] = quality
     
     files = []
@@ -306,7 +306,7 @@ async def get_files_by_quality_and_query(query: str, quality: str, limit: int = 
     except:
         regex = query
     
-    # Build filter criteria
+    # Build filter criteria - ensure quality matching is case-insensitive
     filter_criteria = {
         'file_name': regex,
         'quality': {'$regex': f'^{quality}$', '$options': 'i'}
@@ -406,13 +406,13 @@ def get_quality_keyboard(qualities: List[str], query: str) -> List[List[dict]]:
     
     # Map quality names to display text
     quality_display = {
-        '360p': '360P',
-        '480p': '480P',
-        '540p': '540P',
-        '720p': '720P',
-        '1080p': '1080P',
-        '1440p': '1440P',
         '2160p': '2160P',
+        '1440p': '1440P',
+        '1080p': '1080P',
+        '720p': '720P',
+        '540p': '540P',
+        '480p': '480P',
+        '360p': '360P',
         'HDRip': 'HDRip',
         'WEB-DL': 'WEB-DL',
         'WEBRip': 'WEBRip',
@@ -420,7 +420,8 @@ def get_quality_keyboard(qualities: List[str], query: str) -> List[List[dict]]:
         'DVDRip': 'DVDRip',
         'HDTV': 'HDTV',
         'x264': 'x264',
-        'x265': 'x265'
+        'x265': 'x265',
+        'HEVC': 'HEVC'
     }
     
     for quality in qualities:
@@ -440,3 +441,52 @@ def get_quality_keyboard(qualities: List[str], query: str) -> List[List[dict]]:
         keyboard.append(row)
     
     return keyboard
+
+# Add this function to handle quality-based filtering with pagination
+async def get_filtered_results(query: str, quality: str, limit: int = 10, offset: int = 0):
+    """Get files filtered by quality with pagination"""
+    query = query.strip()
+    
+    if not query:
+        raw_pattern = '.'
+    elif ' ' not in query:
+        raw_pattern = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
+    else:
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+        
+    try:
+        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except:
+        regex = query
+    
+    # Build filter criteria
+    filter_criteria = {'file_name': regex}
+    
+    # Add quality filter if specified
+    if quality and quality != 'all':
+        filter_criteria['quality'] = quality
+    
+    files = []
+    total_results = 0
+    
+    if MULTIPLE_DATABASE:
+        # Get from primary database with pagination
+        cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor1:
+            files.append(file)
+        
+        # Get from secondary database with pagination
+        cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor2:
+            files.append(file)
+            
+        total_results = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
+    else:
+        cursor = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor:
+            files.append(file)
+        total_results = col.count_documents(filter_criteria)
+    
+    next_offset = "" if (offset + limit) >= total_results else (offset + limit)
+    
+    return files, next_offset, total_results
