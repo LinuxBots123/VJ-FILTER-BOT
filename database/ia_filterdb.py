@@ -64,7 +64,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🚀 FINAL BALANCED SEARCH
+# 🚀 FINAL STRICT SEARCH (NO RANDOM RESULTS)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
     query = query.strip().lower()
     words = query.split()
@@ -79,22 +79,39 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     files = []
 
+    main_word = words[0] if words else ""
+
     def match_words(name):
         name = name.lower()
-        name = re.sub(r"[^\w\s]", "", name)
-        match_count = sum(1 for w in words if w in name)
-        return match_count >= max(1, len(words)//2)
+        name_clean = re.sub(r"[^\w\s]", "", name)
+
+        # ❌ reject unrelated
+        if main_word and main_word not in name_clean:
+            return False
+
+        match_count = sum(1 for w in words if w in name_clean)
+
+        return match_count >= max(1, len(words) // 2)
 
     try:
         if MULTIPLE_DATABASE:
-            cursors = list(col.find(search_filter).skip(offset).limit(50)) + \
-                      list(sec_col.find(search_filter).skip(offset).limit(50))
-        else:
-            cursors = list(col.find(search_filter).skip(offset).limit(50))
+            cursor1 = col.find(search_filter).skip(offset).limit(50)
+            cursor2 = sec_col.find(search_filter).skip(offset).limit(50)
 
-        for file in cursors:
-            if match_words(file['file_name']):
-                files.append(file)
+            for file in cursor1:
+                if match_words(file['file_name']):
+                    files.append(file)
+
+            for file in cursor2:
+                if match_words(file['file_name']):
+                    files.append(file)
+
+        else:
+            cursor = col.find(search_filter).skip(offset).limit(50)
+
+            for file in cursor:
+                if match_words(file['file_name']):
+                    files.append(file)
 
     except:
         raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
@@ -102,14 +119,23 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         fallback = {'file_name': regex}
 
         if MULTIPLE_DATABASE:
-            cursors = list(col.find(fallback).skip(offset).limit(50)) + \
-                      list(sec_col.find(fallback).skip(offset).limit(50))
-        else:
-            cursors = list(col.find(fallback).skip(offset).limit(50))
+            cursor1 = col.find(fallback).skip(offset).limit(50)
+            cursor2 = sec_col.find(fallback).skip(offset).limit(50)
 
-        for file in cursors:
-            if match_words(file['file_name']):
-                files.append(file)
+            for file in cursor1:
+                if match_words(file['file_name']):
+                    files.append(file)
+
+            for file in cursor2:
+                if match_words(file['file_name']):
+                    files.append(file)
+
+        else:
+            cursor = col.find(fallback).skip(offset).limit(50)
+
+            for file in cursor:
+                if match_words(file['file_name']):
+                    files.append(file)
 
     files = files[:max_results]
 
