@@ -1,37 +1,48 @@
 pyrofork==2.3.69
 tgcrypto-pyrofork
+
 pymongo==4.13.2
 motor==3.7.1
 marshmallow<4.0.0
 umongo
+
 requests
 bs4
 shortzy
 pytz
 aiohttp
+aiofiles
+
 telegraph
 pymediainfo-pyrofork
 
 opencv-python-headless==4.8.1.78
+
 python-dotenv==0.21.1
+python-decouple
+
 PyLeaves==1.0.2
 humanize
 Pillow
 psutil
+
 numpy
 wheel
 ujson
 wget
-aiofiles
+
 dnspython==2.7.0
-python-decouple
+
 ffmpeg-python==0.2.0
+
 jinja2
 apscheduler
 pyshorteners
 colorama
+
+# SPELL CHECK
 fuzzywuzzy
 python-Levenshtein==0.27.1
 
-git+https://github.com/NBBotz/IMDBKit.git@main#egg=IMDBKit
-git+https://github.com/DreamXBotz/cinemagoer#egg=cinemagoer
+# ✅ IMDb (ONLY THIS)
+git+https://github.com/NBBotz/IMDBKit.git
