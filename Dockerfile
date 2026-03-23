@@ -1,23 +1,22 @@
 # Don't Remove Credit @VJ_Bots
-# Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
 
 FROM python:3.10-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
-
-# Copy requirements
-COPY requirements.txt /requirements.txt
-
-# Install Python dependencies
-RUN pip install --upgrade pip && pip install --no-cache-dir -r /requirements.txt
-
-# Create working directory
+# Set working directory
 WORKDIR /VJ-FILTER-BOT
 
-# Copy project files
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy files
 COPY . .
+
+# Install Python dependencies
+RUN pip install --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Run bot
 CMD ["python", "bot.py"]
