@@ -38,4 +38,6 @@ psutil==5.9.4
 dnspython==2.3.0
 ffmpeg-python>=0.2.0
 openai==0.25.0
-git+https://github.com/Joelkb/cinemagoer.git
+cinemagoer==2023.5.1
+pyspellchecker==0.7.2
+rapidfuzz==3.6.1
