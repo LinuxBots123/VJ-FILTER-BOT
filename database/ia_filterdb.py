@@ -290,6 +290,51 @@ async def get_files_by_quality(query: str, quality: str) -> List[dict]:
     
     return files
 
+async def get_files_by_quality_and_query(query: str, quality: str, limit: int = 10, offset: int = 0):
+    """Get files filtered by both query and quality with pagination"""
+    query = query.strip()
+    
+    if not query:
+        raw_pattern = '.'
+    elif ' ' not in query:
+        raw_pattern = r'(\b|[\.\+\-_])' + re.escape(query) + r'(\b|[\.\+\-_])'
+    else:
+        raw_pattern = query.replace(' ', r'.*[\s\.\+\-_]')
+        
+    try:
+        regex = re.compile(raw_pattern, flags=re.IGNORECASE)
+    except:
+        regex = query
+    
+    # Build filter criteria
+    filter_criteria = {
+        'file_name': regex,
+        'quality': {'$regex': f'^{quality}$', '$options': 'i'}
+    }
+    
+    files = []
+    total_results = 0
+    
+    if MULTIPLE_DATABASE:
+        # Get from primary database
+        cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor1:
+            files.append(file)
+        
+        # Get from secondary database
+        cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor2:
+            files.append(file)
+            
+        total_results = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
+    else:
+        cursor = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(limit)
+        for file in cursor:
+            files.append(file)
+        total_results = col.count_documents(filter_criteria)
+    
+    return files, total_results
+
 async def get_available_qualities(query: str) -> List[str]:
     """Get all available qualities for a given movie"""
     query = query.strip()
@@ -310,18 +355,18 @@ async def get_available_qualities(query: str) -> List[str]:
     
     if MULTIPLE_DATABASE:
         for file in col.find(filter_criteria):
-            if file.get('quality'):
+            if file.get('quality') and file['quality'] != 'Unknown':
                 qualities.add(file['quality'])
         for file in sec_col.find(filter_criteria):
-            if file.get('quality'):
+            if file.get('quality') and file['quality'] != 'Unknown':
                 qualities.add(file['quality'])
     else:
         for file in col.find(filter_criteria):
-            if file.get('quality'):
+            if file.get('quality') and file['quality'] != 'Unknown':
                 qualities.add(file['quality'])
     
     # Sort qualities by priority
-    priority_order = ['2160p', '1440p', '1080p', '720p', '540p', '480p', '360p', 'WEB-DL', 'BluRay', 'HDRip']
+    priority_order = ['2160p', '1440p', '1080p', '720p', '540p', '480p', '360p', 'WEB-DL', 'BluRay', 'HDRip', 'WEBRip', 'DVDRip', 'HDTV']
     sorted_qualities = sorted(list(qualities), key=lambda x: priority_order.index(x) if x in priority_order else len(priority_order))
     
     return sorted_qualities
@@ -359,24 +404,35 @@ def get_quality_keyboard(qualities: List[str], query: str) -> List[List[dict]]:
     keyboard = []
     row = []
     
-    quality_buttons = {
+    # Map quality names to display text
+    quality_display = {
         '360p': '360P',
         '480p': '480P',
         '540p': '540P',
         '720p': '720P',
         '1080p': '1080P',
         '1440p': '1440P',
-        '2160p': '2160P'
+        '2160p': '2160P',
+        'HDRip': 'HDRip',
+        'WEB-DL': 'WEB-DL',
+        'WEBRip': 'WEBRip',
+        'BluRay': 'BluRay',
+        'DVDRip': 'DVDRip',
+        'HDTV': 'HDTV',
+        'x264': 'x264',
+        'x265': 'x265'
     }
     
     for quality in qualities:
-        if quality in quality_buttons:
-            button_text = quality_buttons[quality]
-            callback_data = f"quality_{quality}_{query[:50]}"  # Limit query length
+        if quality in quality_display:
+            button_text = quality_display[quality]
+            # Encode query to handle special characters
+            encoded_query = query.replace(' ', '_')[:50]
+            callback_data = f"quality_{quality}_{encoded_query}"
             row.append({'text': button_text, 'callback_data': callback_data})
             
             if len(row) == 2:  # 2 buttons per row
-                keyboard.append(row)
+                keyboard.append(row.copy())
                 row = []
     
     # Add remaining buttons
