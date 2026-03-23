@@ -1,4 +1,4 @@
-import logging, asyncio, os, re, random, pytz, aiohttp, requests, string, json, http.client
+import logging, asyncio, os, re, random, pytz, aiohttp, requests, string
 from info import *
 from imdbkit import IMDBKit
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
@@ -6,7 +6,7 @@ from pyrogram import enums
 from pyrogram.errors import *
 from typing import Union, List
 from Script import script
-from datetime import datetime, date
+from datetime import date
 from database.users_chats_db import db
 from database.join_reqs import JoinReqs
 from bs4 import BeautifulSoup
@@ -18,7 +18,24 @@ logger.setLevel(logging.INFO)
 join_db = JoinReqs
 imdb = IMDBKit()
 
-# ---------------- FIXED IMDB FUNCTION ---------------- #
+# ---------------- TEMP CLASS (IMPORTANT) ---------------- #
+
+class temp(object):
+    BANNED_USERS = []
+    BANNED_CHATS = []
+    ME = None
+    BOT = None
+    CURRENT = int(os.environ.get("SKIP", 2))
+    CANCEL = False
+    MELCOW = {}
+    U_NAME = None
+    B_NAME = None
+    GETALL = {}
+    SHORT = {}
+    SETTINGS = {}
+    IMDB_CAP = {}
+
+# ---------------- IMDB FUNCTION ---------------- #
 
 async def get_poster(query, bulk=False, id=False, file=None):
     try:
@@ -77,8 +94,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         logger.error(f"IMDb Error: {e}")
         return None
 
-
-# ---------------- REST OF YOUR ORIGINAL CODE ---------------- #
+# ---------------- SUBSCRIBE CHECK ---------------- #
 
 async def pub_is_subscribed(bot, query, channel):
     btn = []
@@ -90,7 +106,7 @@ async def pub_is_subscribed(bot, query, channel):
             btn.append(
                 [InlineKeyboardButton(f'Join {chat.title}', url=chat.invite_link)]
             )
-        except Exception:
+        except:
             pass
     return btn
 
@@ -103,23 +119,21 @@ async def is_subscribed(bot, query):
     except:
         return False
 
+# ---------------- HELPERS ---------------- #
 
 def list_to_str(k):
     if not k:
         return "N/A"
-    elif len(k) == 1:
-        return str(k[0])
-    else:
-        return ', '.join(str(i) for i in k)
+    return ', '.join(str(i) for i in k)
 
 
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB"]
     size = float(size)
     i = 0
-    while size >= 1024.0 and i < len(units):
+    while size >= 1024 and i < len(units):
+        size /= 1024
         i += 1
-        size /= 1024.0
     return "%.2f %s" % (size, units[i])
 
 
@@ -133,8 +147,8 @@ def humanbytes(size):
         return ""
     power = 2**10
     n = 0
-    Dic_powerN = {0: '', 1: 'Ki', 2: 'Mi', 3: 'Gi'}
+    units = ["", "Ki", "Mi", "Gi", "Ti"]
     while size > power:
         size /= power
         n += 1
-    return str(round(size, 2)) + " " + Dic_powerN[n] + 'B'
+    return f"{round(size,2)} {units[n]}B"
