@@ -38,5 +38,4 @@ psutil==5.9.4
 dnspython==2.3.0
 ffmpeg-python>=0.2.0
 openai==0.25.0
-https://github.com/NBBotz/IMDBKit/archive/refs/heads/main.zip
-git+https://github.com/DreamXBotz/cinemagoer
+git+https://github.com/Joelkb/cinemagoer
