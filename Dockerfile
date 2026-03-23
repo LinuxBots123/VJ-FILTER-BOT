@@ -3,18 +3,27 @@ FROM python:3.10-slim
 ENV PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
+# Install required system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc g++ ffmpeg git \
+    ffmpeg \
+    mediainfo \
+    libmediainfo0v5 \
+    ca-certificates \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Install all other dependencies first
+# Copy requirements first
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Install IMDBKit LAST (with its dependencies)
-RUN pip install --no-cache-dir git+https://github.com/NBBotz/IMDBKit
+# Upgrade pip
+RUN pip install --upgrade pip --root-user-action=ignore
 
+# Install Python dependencies
+RUN pip install --no-cache-dir -r requirements.txt --root-user-action=ignore
+
+# Copy project files
 COPY . .
-CMD ["python", "bot.py"]
+
+# Start bot
+CMD ["python3", "bot.py"]
