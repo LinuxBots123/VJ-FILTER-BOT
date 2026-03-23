@@ -1,9 +1,6 @@
 import logging, asyncio, os, re, random, pytz, aiohttp, requests, string
 from info import *
-
-# ✅ FIXED IMPORT (important)
 from imdbkit import IMDBKit
-
 from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
 from pyrogram import enums
 from pyrogram.errors import *
@@ -20,14 +17,15 @@ logger.setLevel(logging.INFO)
 
 join_db = JoinReqs
 
-# ✅ SAFE INIT (prevents crash if imdb fails)
+# ✅ SAFE IMDB INIT
 try:
     imdb = IMDBKit()
 except Exception as e:
     logger.error(f"IMDBKit Init Error: {e}")
     imdb = None
 
-# ---------------- TEMP CLASS (IMPORTANT) ---------------- #
+
+# ---------------- TEMP CLASS ---------------- #
 
 class temp(object):
     BANNED_USERS = []
@@ -44,6 +42,7 @@ class temp(object):
     SETTINGS = {}
     IMDB_CAP = {}
 
+
 # ---------------- IMDB FUNCTION ---------------- #
 
 async def get_poster(query, bulk=False, id=False, file=None):
@@ -59,7 +58,6 @@ async def get_poster(query, bulk=False, id=False, file=None):
 
             movie_data = results.titles[0]
             imdb_id = movie_data.imdbId.replace("tt", "")
-
             movie = imdb.get_movie(imdb_id)
         else:
             imdb_id = query.replace("tt", "")
@@ -106,6 +104,7 @@ async def get_poster(query, bulk=False, id=False, file=None):
         logger.error(f"IMDb Error: {e}")
         return None
 
+
 # ---------------- SUBSCRIBE CHECK ---------------- #
 
 async def pub_is_subscribed(bot, query, channel):
@@ -131,7 +130,8 @@ async def is_subscribed(bot, query):
     except:
         return False
 
-# ---------------- GOOGLE SEARCH (MISSING FIX) ---------------- #
+
+# ---------------- GOOGLE SEARCH ---------------- #
 
 async def search_gagala(query):
     url = f"https://www.google.com/search?q={query}"
@@ -154,6 +154,7 @@ async def search_gagala(query):
         logger.error(f"Search error: {e}")
         return []
 
+
 # ---------------- SHORTLINK ---------------- #
 
 async def get_shortlink(link):
@@ -163,20 +164,24 @@ async def get_shortlink(link):
     except:
         return link
 
+
 # ---------------- SETTINGS ---------------- #
 
 async def get_settings(group_id):
     return temp.SETTINGS.get(group_id, {})
+
 
 async def save_group_settings(group_id, key, value):
     if group_id not in temp.SETTINGS:
         temp.SETTINGS[group_id] = {}
     temp.SETTINGS[group_id][key] = value
 
+
 # ---------------- TUTORIAL ---------------- #
 
 async def get_tutorial(message):
     return "No tutorial available."
+
 
 # ---------------- SEND ALL ---------------- #
 
@@ -187,10 +192,12 @@ async def send_all(client, users, text):
         except:
             pass
 
+
 # ---------------- CAPTION ---------------- #
 
 def get_cap(text):
     return text
+
 
 # ---------------- HELPERS ---------------- #
 
@@ -221,11 +228,9 @@ def humanbytes(size):
     power = 2**10
     n = 0
     units = ["", "Ki", "Mi", "Gi", "Ti"]
+
     while size > power:
         size /= power
         n += 1
-    return f"{round(size,2)} {units[n]}B"    units = ["", "Ki", "Mi", "Gi", "Ti"]
-    while size > power:
-        size /= power
-        n += 1
+
     return f"{round(size,2)} {units[n]}B"
