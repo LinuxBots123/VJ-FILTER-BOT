@@ -199,6 +199,65 @@ def get_cap(text):
     return text
 
 
+# ---------------- TOKEN SYSTEM ---------------- #
+
+async def verify_user(user_id):
+    return True
+
+async def check_token(user_id):
+    return True
+
+async def check_verification(user_id):
+    return True
+
+async def get_token(user_id):
+    return "free"
+
+def get_seconds(time):
+    try:
+        return int(time)
+    except:
+        return 0
+
+
+# ---------------- BROADCAST ---------------- #
+
+async def broadcast_messages(client, users, message):
+    success = 0
+    failed = 0
+
+    for user in users:
+        try:
+            await client.copy_message(
+                chat_id=user,
+                from_chat_id=message.chat.id,
+                message_id=message.id
+            )
+            success += 1
+        except:
+            failed += 1
+
+    return success, failed
+
+
+async def broadcast_messages_group(client, groups, message):
+    success = 0
+    failed = 0
+
+    for group in groups:
+        try:
+            await client.copy_message(
+                chat_id=group,
+                from_chat_id=message.chat.id,
+                message_id=message.id
+            )
+            success += 1
+        except:
+            failed += 1
+
+    return success, failed
+
+
 # ---------------- HELPERS ---------------- #
 
 def list_to_str(k):
