@@ -258,6 +258,26 @@ async def broadcast_messages_group(client, groups, message):
     return success, failed
 
 
+# ---------------- EXTRA (MISSING FUNCTIONS FIX) ---------------- #
+
+def get_file_id(message):
+    if message.document:
+        return message.document.file_id
+    if message.video:
+        return message.video.file_id
+    if message.audio:
+        return message.audio.file_id
+    return None
+
+
+def parser(text):
+    return text
+
+
+def split_quotes(text):
+    return text.split()
+
+
 # ---------------- HELPERS ---------------- #
 
 def list_to_str(k):
