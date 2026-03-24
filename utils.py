@@ -18,7 +18,8 @@ logger.setLevel(logging.INFO)
 join_db = JoinReqs
 BTN_URL_REGEX = re.compile(r"(\[([^\[]+?)\]\((buttonurl|buttonalert):(?:/{0,2})(.+?)(:same)?\))")
 
-imdb = IMDBKit()  # <-- changed from Cinemagoer()
+imdb = IMDBKit()# <-- changed from Cinemagoer()
+SPELL_CHECK = {}   # Stores suggestions for spell check callback
 TOKENS = {}
 VERIFIED = {}
 BANNED = {}
@@ -42,8 +43,7 @@ class temp(object):
     SHORT = {}
     SETTINGS = {}
     IMDB_CAP = {}
-    SPELL_CHECK = {}   # Stores suggestions for spell check callback
-
+    
 async def pub_is_subscribed(bot, query, channel):
     btn = []
     for id in channel:
