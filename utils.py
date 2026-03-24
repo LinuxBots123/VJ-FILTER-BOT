@@ -24,7 +24,6 @@ except Exception as e:
     logger.error(f"IMDBKit Init Error: {e}")
     imdb = None
 
-
 # ---------------- TEMP CLASS ---------------- #
 
 class temp(object):
@@ -41,7 +40,6 @@ class temp(object):
     SHORT = {}
     SETTINGS = {}
     IMDB_CAP = {}
-
 
 # ---------------- IMDB FUNCTION ---------------- #
 
@@ -104,7 +102,6 @@ async def get_poster(query, bulk=False, id=False, file=None):
         logger.error(f"IMDb Error: {e}")
         return None
 
-
 # ---------------- SUBSCRIBE CHECK ---------------- #
 
 async def pub_is_subscribed(bot, query, channel):
@@ -121,7 +118,6 @@ async def pub_is_subscribed(bot, query, channel):
             pass
     return btn
 
-
 async def is_subscribed(bot, query):
     try:
         user = await bot.get_chat_member(AUTH_CHANNEL, query.from_user.id)
@@ -129,7 +125,6 @@ async def is_subscribed(bot, query):
             return True
     except:
         return False
-
 
 # ---------------- GOOGLE SEARCH ---------------- #
 
@@ -154,7 +149,6 @@ async def search_gagala(query):
         logger.error(f"Search error: {e}")
         return []
 
-
 # ---------------- SHORTLINK ---------------- #
 
 async def get_shortlink(link):
@@ -164,24 +158,20 @@ async def get_shortlink(link):
     except:
         return link
 
-
 # ---------------- SETTINGS ---------------- #
 
 async def get_settings(group_id):
     return temp.SETTINGS.get(group_id, {})
-
 
 async def save_group_settings(group_id, key, value):
     if group_id not in temp.SETTINGS:
         temp.SETTINGS[group_id] = {}
     temp.SETTINGS[group_id][key] = value
 
-
 # ---------------- TUTORIAL ---------------- #
 
 async def get_tutorial(message):
     return "No tutorial available."
-
 
 # ---------------- SEND ALL ---------------- #
 
@@ -192,12 +182,10 @@ async def send_all(client, users, text):
         except:
             pass
 
-
 # ---------------- CAPTION ---------------- #
 
 def get_cap(text):
     return text
-
 
 # ---------------- TOKEN SYSTEM ---------------- #
 
@@ -219,7 +207,6 @@ def get_seconds(time):
     except:
         return 0
 
-
 # ---------------- BROADCAST ---------------- #
 
 async def broadcast_messages(client, users, message):
@@ -239,7 +226,6 @@ async def broadcast_messages(client, users, message):
 
     return success, failed
 
-
 async def broadcast_messages_group(client, groups, message):
     success = 0
     failed = 0
@@ -257,7 +243,6 @@ async def broadcast_messages_group(client, groups, message):
 
     return success, failed
 
-
 # ---------------- EXTRA (MISSING FUNCTIONS FIX) ---------------- #
 
 def get_file_id(message):
@@ -269,14 +254,11 @@ def get_file_id(message):
         return message.audio.file_id
     return None
 
-
 def parser(text):
     return text
 
-
 def split_quotes(text):
     return text.split()
-
 
 # ---------------- HELPERS ---------------- #
 
@@ -284,7 +266,6 @@ def list_to_str(k):
     if not k:
         return "N/A"
     return ', '.join(str(i) for i in k)
-
 
 def get_size(size):
     units = ["Bytes", "KB", "MB", "GB", "TB"]
@@ -295,11 +276,9 @@ def get_size(size):
         i += 1
     return "%.2f %s" % (size, units[i])
 
-
 def split_list(l, n):
     for i in range(0, len(l), n):
         yield l[i:i + n]
-
 
 def humanbytes(size):
     if not size:
