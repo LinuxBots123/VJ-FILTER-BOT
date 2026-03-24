@@ -45,9 +45,6 @@ colorama
 fuzzywuzzy
 python-Levenshtein==0.27.1
 
-# ✅ IMDb (PyPI version only — no GitHub)
-cinemagoer
-
 # ✅ Added missing useful modules
 yt-dlp
 ytthumb
