@@ -1,58 +1,56 @@
-pyrofork==2.3.69
-tgcrypto-pyrofork
-openai
+# Core bot
+pyrofork==2.3.45
+tgcrypto
 
-pymongo==4.13.2
-motor==3.7.1
-marshmallow<4.0.0
-umongo
-
+# Web
 requests
 beautifulsoup4
-shortzy
-pytz
 aiohttp
 aiofiles
+googletrans
 
-telegraph
-pymediainfo-pyrofork
-
-opencv-python-headless==4.8.1.78
-
+# Utilities
+shortzy
+pytz
 python-dotenv==0.21.1
 python-decouple
-
-PyLeaves==1.0.2
+colorama
 humanize
-Pillow
 psutil
-
-numpy
-wheel
 ujson
 wget
 
-dnspython==2.7.0
-
-ffmpeg-python==0.2.0
-
-jinja2
-apscheduler
-pyshorteners
-colorama
-
-# SPELL CHECK
-fuzzywuzzy
-python-Levenshtein==0.27.1
-
-# ✅ Added missing useful modules
+# Media / YouTube
 yt-dlp
 ytthumb
 youtube_search
 youtube-search-python==1.4.6
-gTTS==2.3.1
-googletrans==3.1.0a0
+
+# Scheduler / templating
+jinja2
+apscheduler
+
+# Database (FIXED versions)
+pymongo==4.13.2
+motor==3.7.1
+marshmallow==3.20.1
+umongo==3.1.0
+
+# Image / processing
+Pillow==9.4.0
+opencv-python-headless==4.8.1.78
+numpy
+
+# Misc
 hachoir
+gTTS==2.3.1
 speedtest-cli
-# ✅ IMDb (ONLY THIS)
-git+https://github.com/NBBotz/IMDBKit.git
+dnspython==2.3.0
+
+# IMDbKit dependencies (IMPORTANT)
+wrapt==1.15.0
+deprecated==1.2.14
+cryptography==41.0.7
+
+# Optional AI
+openai==0.25.0
