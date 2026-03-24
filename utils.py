@@ -42,7 +42,7 @@ class temp(object):
     SHORT = {}
     SETTINGS = {}
     IMDB_CAP = {}
-
+    SPELL_CHECK = {}   # Stores suggestions for spell check callback
 
 async def pub_is_subscribed(bot, query, channel):
     btn = []
