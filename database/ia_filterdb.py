@@ -80,7 +80,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🚀 OPTIMIZED SEARCH FUNCTION
+# 🚀 OPTIMIZED SEARCH FUNCTION - FIXED TO SEARCH ANYWHERE
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip()
@@ -88,8 +88,8 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if not query:
         regex = re.compile(".")
     else:
-        # ✅ INDEX-FRIENDLY PREFIX SEARCH
-        pattern = f'^{re.escape(query)}'
+        # ✅ FULL SUBSTRING SEARCH (NOT JUST PREFIX) – FIXES QUALITY FILTER
+        pattern = f'.*{re.escape(query)}.*'
         regex = re.compile(pattern, re.IGNORECASE)
 
     filter = {'file_name': regex}
@@ -120,7 +120,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     return files, next_offset, total_results
 
 
-# ⚡ FAST BAD FILE SEARCH
+# ⚡ FAST BAD FILE SEARCH - ALSO UPDATED
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = query.strip()
@@ -128,7 +128,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     if not query:
         regex = re.compile(".")
     else:
-        pattern = f'^{re.escape(query)}'
+        pattern = f'.*{re.escape(query)}.*'
         regex = re.compile(pattern, re.IGNORECASE)
 
     filter_criteria = {'file_name': regex}
@@ -177,4 +177,4 @@ def unpack_new_file_id(new_file_id):
             decoded.media_id,
             decoded.access_hash
         )
-    )
+        )
