@@ -249,7 +249,7 @@ async def next_page(bot, query):
         remaining_seconds = "{:.2f}".format(time_difference.total_seconds())
         cap = await get_cap(settings, remaining_seconds, files, query, total, search)
         try:
-            await safe_edit(query, text=text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
+            await safe_edit(query, text=cap, reply_markup=InlineKeyboardMarkup(btn), disable_web_page_preview=True)
         except MessageNotModified:
             pass
     else:
