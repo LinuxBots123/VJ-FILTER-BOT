@@ -1,23 +1,24 @@
-# Don't Remove Credit @VJ_Bots
-# Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
+# OPTIMIZED DB + SEARCH SYSTEM (FAST + QUALITY FIXED)
 
-import re, base64, json
+import re, base64
 from struct import pack
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
-from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
+from info import *
 
-# First Database
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
-# Second Database
 sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
+
+
+# ⚡ CREATE INDEX (RUN ONCE)
+col.create_index("file_name")
+sec_col.create_index("file_name")
 
 
 async def save_file(media):
@@ -46,8 +47,6 @@ async def save_file(media):
                 return True, 1
             except DuplicateKeyError:
                 return False, 0
-        else:
-            print("Database full, enable MULTIPLE_DATABASE")
 
 
 def clean_file_name(file_name):
@@ -55,7 +54,7 @@ def clean_file_name(file_name):
     for char in ['[', ']', '(', ')', '{', '}']:
         file_name = file_name.replace(char, '')
 
-    old_file_name = ' '.join(
+    return ' '.join(
         x for x in file_name.split()
         if not x.startswith('@')
         and not x.startswith('http')
@@ -63,73 +62,54 @@ def clean_file_name(file_name):
         and not x.startswith('t.me')
     )
 
-    return add_space_between_e_and_number(old_file_name)
-
-
-def add_space_between_e_and_number(input_string):
-    return re.sub(r'(e|E)([0-9])', r'\1 \2', input_string)
-
 
 def is_file_already_saved(file_id, file_name):
-    query_id = {'file_id': file_id}
-    query_name = {'file_name': file_name}
-
     for collection in [col, sec_col]:
-        if collection.find_one(query_id) or collection.find_one(query_name):
+        if collection.find_one({'file_id': file_id}) or collection.find_one({'file_name': file_name}):
             return True
     return False
 
 
-# 🚀 OPTIMIZED SEARCH FUNCTION - FIXED TO SEARCH ANYWHERE
+# 🚀 ULTRA FAST SEARCH (INDEX + FALLBACK)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip()
 
-    if not query:
-        regex = re.compile(".")
-    else:
-        # ✅ FULL SUBSTRING SEARCH (NOT JUST PREFIX) – FIXES QUALITY FILTER
-        pattern = f'.*{re.escape(query)}.*'
-        regex = re.compile(pattern, re.IGNORECASE)
-
-    filter = {'file_name': regex}
-
-    files = []
-
-    # ✅ Fetch only needed fields (FASTER)
     projection = {"file_id": 1, "file_name": 1, "file_size": 1, "caption": 1}
 
+    # ⚡ FAST MODE (INDEX USED)
+    fast_filter = {"file_name": {"$regex": f"^{re.escape(query)}", "$options": "i"}}
+
+    # ⚡ FALLBACK MODE (ONLY IF NEEDED)
+    slow_filter = {"file_name": {"$regex": re.escape(query), "$options": "i"}}
+
+    def fetch(collection, flt):
+        return list(collection.find(flt, projection).sort("_id", -1).skip(offset).limit(max_results))
+
+    files = fetch(col, fast_filter)
+
     if MULTIPLE_DATABASE:
-        cursor1 = col.find(filter, projection).sort("_id", -1).skip(offset).limit(max_results)
-        cursor2 = sec_col.find(filter, projection).sort("_id", -1).skip(offset).limit(max_results)
+        files += fetch(sec_col, fast_filter)
 
-        files.extend(list(cursor1))
-        files.extend(list(cursor2))
+    # 🔥 fallback if nothing found
+    if not files:
+        files = fetch(col, slow_filter)
+        if MULTIPLE_DATABASE:
+            files += fetch(sec_col, slow_filter)
 
-    else:
-        cursor = col.find(filter, projection).sort("_id", -1).skip(offset).limit(max_results)
-        files = list(cursor)
+    total = len(files)
 
-    total_results = (
-        col.count_documents(filter) + sec_col.count_documents(filter)
-        if MULTIPLE_DATABASE else col.count_documents(filter)
-    )
+    next_offset = "" if (offset + max_results) >= total else (offset + max_results)
 
-    next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-
-    return files, next_offset, total_results
+    return files[:max_results], next_offset, total
 
 
-# ⚡ FAST BAD FILE SEARCH - ALSO UPDATED
+# ⚡ FAST BAD FILE SEARCH
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = query.strip()
 
-    if not query:
-        regex = re.compile(".")
-    else:
-        pattern = f'.*{re.escape(query)}.*'
-        regex = re.compile(pattern, re.IGNORECASE)
+    regex = {"$regex": re.escape(query), "$options": "i"}
 
     filter_criteria = {'file_name': regex}
 
@@ -141,12 +121,10 @@ async def get_bad_files(query, file_type=None, use_filter=False):
 
     if MULTIPLE_DATABASE:
         files = fetch(col) + fetch(sec_col)
-        total = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
     else:
         files = fetch(col)
-        total = col.count_documents(filter_criteria)
 
-    return files, total
+    return files, len(files)
 
 
 async def get_file_details(query):
@@ -170,8 +148,7 @@ def encode_file_id(s: bytes) -> str:
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     return encode_file_id(
-        pack(
-            "<iiqq",
+        pack("<iiqq",
             int(decoded.file_type),
             decoded.dc_id,
             decoded.media_id,
