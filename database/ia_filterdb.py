@@ -177,4 +177,4 @@ def unpack_new_file_id(new_file_id):
             decoded.media_id,
             decoded.access_hash
         )
-        )
+    )
