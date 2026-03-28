@@ -70,18 +70,17 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🚀 ULTRA FAST SEARCH (INDEX + FALLBACK)
+# 🚀 FIXED SEARCH (QUALITY WORKING)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip()
 
     projection = {"file_id": 1, "file_name": 1, "file_size": 1, "caption": 1}
 
-    # ⚡ FAST MODE (INDEX USED)
-    fast_filter = {"file_name": {"$regex": f"^{re.escape(query)}", "$options": "i"}}
+    # ✅ FIXED REGEX (NO PREFIX LIMIT)
+    fast_filter = {"file_name": {"$regex": re.escape(query), "$options": "i"}}
 
-    # ⚡ FALLBACK MODE (ONLY IF NEEDED)
-    slow_filter = {"file_name": {"$regex": re.escape(query), "$options": "i"}}
+    slow_filter = {"file_name": {"$regex": f".*{re.escape(query)}.*", "$options": "i"}}
 
     def fetch(collection, flt):
         return list(collection.find(flt, projection).sort("_id", -1).skip(offset).limit(max_results))
@@ -91,20 +90,21 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if MULTIPLE_DATABASE:
         files += fetch(sec_col, fast_filter)
 
-    # 🔥 fallback if nothing found
     if not files:
         files = fetch(col, slow_filter)
         if MULTIPLE_DATABASE:
             files += fetch(sec_col, slow_filter)
 
-    total = len(files)
+    total = (
+        col.count_documents(slow_filter) + sec_col.count_documents(slow_filter)
+        if MULTIPLE_DATABASE else col.count_documents(slow_filter)
+    )
 
     next_offset = "" if (offset + max_results) >= total else (offset + max_results)
 
     return files[:max_results], next_offset, total
 
 
-# ⚡ FAST BAD FILE SEARCH
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = query.strip()
