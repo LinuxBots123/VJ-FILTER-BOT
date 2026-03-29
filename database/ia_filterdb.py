@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
 from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE
 
+# ------------------ DATABASE ------------------
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
@@ -17,18 +18,19 @@ sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
 
+# ------------------ CLEAN FILE NAME ------------------
 def clean_file_name(file_name):
     file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
-    unwanted = ['[', ']', '(', ')', '{', '}']
 
-    for char in unwanted:
-        file_name = file_name.replace(char, '')
+    for ch in ['[', ']', '(', ')', '{', '}']:
+        file_name = file_name.replace(ch, '')
 
     return ' '.join(
         filter(lambda x: not x.startswith('@') and not x.startswith('http'), file_name.split())
     )
 
 
+# ------------------ SAVE FILE ------------------
 async def save_file(media):
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
@@ -47,6 +49,7 @@ async def save_file(media):
         return False, 0
 
 
+# ------------------ QUERY CLEAN ------------------
 def normalize_query(query):
     query = query.lower()
 
@@ -61,6 +64,7 @@ def normalize_query(query):
     return " ".join(words).strip()
 
 
+# ------------------ 🔥 MAIN SEARCH ------------------
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = normalize_query(query)
@@ -74,6 +78,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     keywords = query.split()
 
+    # 🔥 STRICT AND SEARCH
     regex = "".join([f"(?=.*{re.escape(k)})" for k in keywords])
 
     filter_criteria = {
@@ -92,10 +97,42 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     return files, next_offset, total
 
 
+# ------------------ 🔥 REQUIRED FIX ------------------
+async def get_bad_files(query, file_type=None, use_filter=False):
+
+    query = normalize_query(query)
+
+    if not query:
+        files = list(col.find({}))
+        total = col.estimated_document_count()
+        return files, total
+
+    keywords = query.split()
+
+    regex = "".join([f"(?=.*{re.escape(k)})" for k in keywords])
+
+    filter_criteria = {
+        "file_name": {
+            "$regex": regex,
+            "$options": "i"
+        }
+    }
+
+    files = list(col.find(filter_criteria))
+    total = col.count_documents(filter_criteria)
+
+    return files, total
+
+
+# ------------------ FILE DETAILS ------------------
 async def get_file_details(query):
-    return col.find_one({'file_id': query})
+    result = col.find_one({'file_id': query})
+    if not result and MULTIPLE_DATABASE:
+        result = sec_col.find_one({'file_id': query})
+    return result
 
 
+# ------------------ FILE ID ------------------
 def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(s).decode().rstrip("=")
 
@@ -103,5 +140,9 @@ def encode_file_id(s: bytes) -> str:
 def unpack_new_file_id(new_file_id):
     decoded = FileId.decode(new_file_id)
     return encode_file_id(
-        pack("<iiqq", int(decoded.file_type), decoded.dc_id, decoded.media_id, decoded.access_hash)
+        pack("<iiqq",
+             int(decoded.file_type),
+             decoded.dc_id,
+             decoded.media_id,
+             decoded.access_hash)
     )
