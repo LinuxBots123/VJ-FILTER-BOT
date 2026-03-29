@@ -110,10 +110,8 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
     else:
         # Multiple keywords - build pattern: (?=.*keyword1)(?=.*keyword2) etc.
-        # This matches files containing ALL keywords anywhere in the filename
         regex_parts = []
         for kw in keywords:
-            # Escape special regex characters and create lookahead
             escaped_kw = re.escape(kw)
             regex_parts.append(f'(?=.*{escaped_kw})')
         regex_pattern = ''.join(regex_parts)
