@@ -78,7 +78,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-    """FAST search using MongoDB text search with AND operator for multiple keywords"""
+    """ULTRA-FAST search using MongoDB regex with AND operator for multiple keywords"""
     
     query = query.strip()
     
@@ -88,7 +88,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         files = []
         
         if MULTIPLE_DATABASE:
-            # Parallel execution for speed
             cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
             cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
             
@@ -105,19 +104,22 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     # Split query into keywords for AND search
     keywords = query.lower().split()
     
-    # Create regex that matches ALL keywords (any order)
-    # This is more flexible than text search for quality filtering
-    if len(keywords) > 1:
-        # Build regex with positive lookahead for each keyword
-        # Example: for "kgf 1080p" -> (?=.*kgf)(?=.*1080p)
-        regex_parts = [rf'(?=.*{re.escape(kw)})' for kw in keywords]
-        regex_pattern = ''.join(regex_parts)
-        filter_criteria = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
-    else:
+    # Build regex that matches ALL keywords in any order
+    if len(keywords) == 1:
         # Single keyword - simple regex
         filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
+    else:
+        # Multiple keywords - build pattern: (?=.*keyword1)(?=.*keyword2) etc.
+        # This matches files containing ALL keywords anywhere in the filename
+        regex_parts = []
+        for kw in keywords:
+            # Escape special regex characters and create lookahead
+            escaped_kw = re.escape(kw)
+            regex_parts.append(f'(?=.*{escaped_kw})')
+        regex_pattern = ''.join(regex_parts)
+        filter_criteria = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
     
-    # Use regex search (fast with index)
+    # Execute search
     if MULTIPLE_DATABASE:
         cursor1 = col.find(filter_criteria).sort('_id', -1).skip(offset).limit(max_results)
         cursor2 = sec_col.find(filter_criteria).sort('_id', -1).skip(offset).limit(max_results)
@@ -130,14 +132,17 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         total_results = col.count_documents(filter_criteria)
     
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
-    return files[:max_results], next_offset, total_results
+    
+    # Limit results to max_results
+    files = files[:max_results]
+    
+    return files, next_offset, total_results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
     """FAST version for getting all files matching query"""
     query = query.strip()
 
     if not query:
-        # Return all files with estimated count
         if MULTIPLE_DATABASE:
             files = list(col.find({})) + list(sec_col.find({}))
             total_results = col.estimated_document_count() + sec_col.estimated_document_count()
@@ -146,26 +151,35 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             total_results = col.estimated_document_count()
         return files, total_results
 
-    # Split query into keywords for AND search
     keywords = query.lower().split()
     
-    if len(keywords) > 1:
-        regex_parts = [rf'(?=.*{re.escape(kw)})' for kw in keywords]
+    if len(keywords) == 1:
+        filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
+    else:
+        regex_parts = []
+        for kw in keywords:
+            escaped_kw = re.escape(kw)
+            regex_parts.append(f'(?=.*{escaped_kw})')
         regex_pattern = ''.join(regex_parts)
         filter_criteria = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
-    else:
-        filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
     
     if MULTIPLE_DATABASE:
         files = list(col.find(filter_criteria)) + list(sec_col.find(filter_criteria))
         total_results = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
         
         if USE_CAPTION_FILTER:
-            # Also search in captions if enabled
-            caption_filter = {'caption': {'$regex': regex_pattern if len(keywords) > 1 else re.escape(query), '$options': 'i'}}
+            if len(keywords) == 1:
+                caption_filter = {'caption': {'$regex': re.escape(query), '$options': 'i'}}
+            else:
+                regex_parts = []
+                for kw in keywords:
+                    escaped_kw = re.escape(kw)
+                    regex_parts.append(f'(?=.*{escaped_kw})')
+                regex_pattern = ''.join(regex_parts)
+                caption_filter = {'caption': {'$regex': regex_pattern, '$options': 'i'}}
             caption_files = list(col.find(caption_filter)) + list(sec_col.find(caption_filter))
             files.extend(caption_files)
-            # Remove duplicates while preserving order
+            # Remove duplicates
             seen = set()
             unique_files = []
             for f in files:
@@ -179,7 +193,15 @@ async def get_bad_files(query, file_type=None, use_filter=False):
         total_results = col.count_documents(filter_criteria)
         
         if USE_CAPTION_FILTER:
-            caption_filter = {'caption': {'$regex': regex_pattern if len(keywords) > 1 else re.escape(query), '$options': 'i'}}
+            if len(keywords) == 1:
+                caption_filter = {'caption': {'$regex': re.escape(query), '$options': 'i'}}
+            else:
+                regex_parts = []
+                for kw in keywords:
+                    escaped_kw = re.escape(kw)
+                    regex_parts.append(f'(?=.*{escaped_kw})')
+                regex_pattern = ''.join(regex_parts)
+                caption_filter = {'caption': {'$regex': regex_pattern, '$options': 'i'}}
             caption_files = list(col.find(caption_filter))
             files.extend(caption_files)
             # Remove duplicates
