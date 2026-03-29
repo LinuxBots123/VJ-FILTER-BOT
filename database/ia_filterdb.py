@@ -1,31 +1,34 @@
-# OPTIMIZED DB + SEARCH SYSTEM (FAST + QUALITY FIXED)
+# Don't Remove Credit @VJ_Bots
+# Subscribe YouTube Channel For Amazing Bot @Tech_VJ
+# Ask Doubt on telegram @KingVJ01
 
-import re, base64
+import re, base64, json
 from struct import pack
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
 from pymongo.errors import DuplicateKeyError
-from info import *
+from info import FILE_DB_URI, SEC_FILE_DB_URI, DATABASE_NAME, COLLECTION_NAME, MULTIPLE_DATABASE, USE_CAPTION_FILTER, MAX_B_TN
 
+# First Database For File Saving 
 client = MongoClient(FILE_DB_URI)
 db = client[DATABASE_NAME]
 col = db[COLLECTION_NAME]
 
+# Second Database For File Saving
 sec_client = MongoClient(SEC_FILE_DB_URI)
 sec_db = sec_client[DATABASE_NAME]
 sec_col = sec_db[COLLECTION_NAME]
 
-# ⚡ CREATE INDEX (RUN ONCE)
-col.create_index("file_name")
-sec_col.create_index("file_name")
-
 async def save_file(media):
+    """Save file in the database."""
+
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
+    new_file_name = f"@VJ_Bots {file_name}"
 
     file = {
         'file_id': file_id,
-        'file_name': file_name,
+        'file_name': new_file_name,
         'file_size': media.file_size,
         'caption': media.caption.html if media.caption else None
     }
@@ -35,93 +38,168 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
+        print(f"{file_name} is successfully saved.")
         return True, 1
     except DuplicateKeyError:
+        print(f"{file_name} is already saved.")
         return False, 0
     except:
         if MULTIPLE_DATABASE:
             try:
                 sec_col.insert_one(file)
+                print(f"{file_name} is successfully saved.")
                 return True, 1
             except DuplicateKeyError:
+                print(f"{file_name} is already saved.")
                 return False, 0
+        else:
+            print("Your Current File Database Is Full, Turn On Multiple Database Feature And Add Second File Mongodb To Save File.")
 
 def clean_file_name(file_name):
-    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name))
-    for char in ['[', ']', '(', ')', '{', '}']:
+    """Clean and format the file name."""
+    file_name = re.sub(r"(_|\-|\.|\+)", " ", str(file_name)) 
+    unwanted_chars = ['[', ']', '(', ')', '{', '}']
+
+    for char in unwanted_chars:
         file_name = file_name.replace(char, '')
 
-    return ' '.join(
-        x for x in file_name.split()
-        if not x.startswith('@')
-        and not x.startswith('http')
-        and not x.startswith('www.')
-        and not x.startswith('t.me')
-    )
+    return ' '.join(filter(lambda x: not x.startswith('@') and not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'), file_name.split()))
 
 def is_file_already_saved(file_id, file_name):
+    """Check if the file is already saved in either collection."""
+    found1 = {'file_name': file_name}
+    found = {'file_id': file_id}
+
     for collection in [col, sec_col]:
-        if collection.find_one({'file_id': file_id}) or collection.find_one({'file_name': file_name}):
+        if collection.find_one(found1) or collection.find_one(found):
+            print(f"{file_name} is already saved.")
             return True
+
     return False
 
-# 🚀 FIXED SEARCH (QUALITY WORKING) - now uses multi-word regex
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
-
+    """FAST search using MongoDB text search with AND operator for multiple keywords"""
+    
     query = query.strip()
+    
     if not query:
-        return [], "", 0
+        # Return recent files with estimated count (fastest)
+        filter_criteria = {}
+        files = []
+        
+        if MULTIPLE_DATABASE:
+            # Parallel execution for speed
+            cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
+            cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
+            
+            files = list(cursor1) + list(cursor2)
+            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+        else:
+            cursor = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
+            files = list(cursor)
+            total_results = col.estimated_document_count()
+        
+        next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
+        return files, next_offset, total_results
 
-    projection = {"file_id": 1, "file_name": 1, "file_size": 1, "caption": 1}
-
-    # Split query into words and create a regex that matches all words (order ignored)
-    words = re.findall(r'\w+', query.lower())
-    if words:
-        # Build a regex that requires each word to appear somewhere in the filename
-        regex_parts = [rf'(?=.*{re.escape(w)})' for w in words]
-        regex = ''.join(regex_parts)
-        # Example: for query "kgf 1080p", regex becomes (?=.*kgf)(?=.*1080p)
-        filter_cond = {"file_name": {"$regex": regex, "$options": "i"}}
+    # Split query into keywords for AND search
+    keywords = query.lower().split()
+    
+    # Create regex that matches ALL keywords (any order)
+    # This is more flexible than text search for quality filtering
+    if len(keywords) > 1:
+        # Build regex with positive lookahead for each keyword
+        # Example: for "kgf 1080p" -> (?=.*kgf)(?=.*1080p)
+        regex_parts = [rf'(?=.*{re.escape(kw)})' for kw in keywords]
+        regex_pattern = ''.join(regex_parts)
+        filter_criteria = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
     else:
-        filter_cond = {"file_name": {"$regex": re.escape(query), "$options": "i"}}
-
-    def fetch(collection):
-        return list(collection.find(filter_cond, projection).sort("_id", -1).skip(offset).limit(max_results))
-
-    files = fetch(col)
+        # Single keyword - simple regex
+        filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
+    
+    # Use regex search (fast with index)
     if MULTIPLE_DATABASE:
-        files += fetch(sec_col)
-
-    total = col.count_documents(filter_cond) + (sec_col.count_documents(filter_cond) if MULTIPLE_DATABASE else 0)
-    next_offset = "" if (offset + max_results) >= total else (offset + max_results)
-
-    return files[:max_results], next_offset, total
+        cursor1 = col.find(filter_criteria).sort('_id', -1).skip(offset).limit(max_results)
+        cursor2 = sec_col.find(filter_criteria).sort('_id', -1).skip(offset).limit(max_results)
+        
+        files = list(cursor1) + list(cursor2)
+        total_results = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
+    else:
+        cursor = col.find(filter_criteria).sort('_id', -1).skip(offset).limit(max_results)
+        files = list(cursor)
+        total_results = col.count_documents(filter_criteria)
+    
+    next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
+    return files[:max_results], next_offset, total_results
 
 async def get_bad_files(query, file_type=None, use_filter=False):
-
+    """FAST version for getting all files matching query"""
     query = query.strip()
+
     if not query:
-        return [], 0
+        # Return all files with estimated count
+        if MULTIPLE_DATABASE:
+            files = list(col.find({})) + list(sec_col.find({}))
+            total_results = col.estimated_document_count() + sec_col.estimated_document_count()
+        else:
+            files = list(col.find({}))
+            total_results = col.estimated_document_count()
+        return files, total_results
 
-    regex = {"$regex": re.escape(query), "$options": "i"}
-
-    filter_criteria = {'file_name': regex}
-
-    if USE_CAPTION_FILTER:
-        filter_criteria = {'$or': [filter_criteria, {'caption': regex}]}
-
-    def fetch(collection):
-        return list(collection.find(filter_criteria, {"file_id": 1, "file_name": 1}))
-
-    if MULTIPLE_DATABASE:
-        files = fetch(col) + fetch(sec_col)
+    # Split query into keywords for AND search
+    keywords = query.lower().split()
+    
+    if len(keywords) > 1:
+        regex_parts = [rf'(?=.*{re.escape(kw)})' for kw in keywords]
+        regex_pattern = ''.join(regex_parts)
+        filter_criteria = {'file_name': {'$regex': regex_pattern, '$options': 'i'}}
     else:
-        files = fetch(col)
+        filter_criteria = {'file_name': {'$regex': re.escape(query), '$options': 'i'}}
+    
+    if MULTIPLE_DATABASE:
+        files = list(col.find(filter_criteria)) + list(sec_col.find(filter_criteria))
+        total_results = col.count_documents(filter_criteria) + sec_col.count_documents(filter_criteria)
+        
+        if USE_CAPTION_FILTER:
+            # Also search in captions if enabled
+            caption_filter = {'caption': {'$regex': regex_pattern if len(keywords) > 1 else re.escape(query), '$options': 'i'}}
+            caption_files = list(col.find(caption_filter)) + list(sec_col.find(caption_filter))
+            files.extend(caption_files)
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_files = []
+            for f in files:
+                if f['file_id'] not in seen:
+                    seen.add(f['file_id'])
+                    unique_files.append(f)
+            files = unique_files
+            total_results = len(files)
+    else:
+        files = list(col.find(filter_criteria))
+        total_results = col.count_documents(filter_criteria)
+        
+        if USE_CAPTION_FILTER:
+            caption_filter = {'caption': {'$regex': regex_pattern if len(keywords) > 1 else re.escape(query), '$options': 'i'}}
+            caption_files = list(col.find(caption_filter))
+            files.extend(caption_files)
+            # Remove duplicates
+            seen = set()
+            unique_files = []
+            for f in files:
+                if f['file_id'] not in seen:
+                    seen.add(f['file_id'])
+                    unique_files.append(f)
+            files = unique_files
+            total_results = len(files)
 
-    return files, len(files)
+    return files, total_results
 
 async def get_file_details(query):
-    return col.find_one({'file_id': query}) or sec_col.find_one({'file_id': query})
+    """Get file details by file_id"""
+    result = col.find_one({'file_id': query})
+    if not result and MULTIPLE_DATABASE:
+        result = sec_col.find_one({'file_id': query})
+    return result
 
 def encode_file_id(s: bytes) -> str:
     r = b""
@@ -137,12 +215,15 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 def unpack_new_file_id(new_file_id):
+    """Return file_id from new file_id format"""
     decoded = FileId.decode(new_file_id)
-    return encode_file_id(
-        pack("<iiqq",
+    file_id = encode_file_id(
+        pack(
+            "<iiqq",
             int(decoded.file_type),
             decoded.dc_id,
             decoded.media_id,
             decoded.access_hash
         )
     )
+    return file_id
