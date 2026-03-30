@@ -19,7 +19,7 @@ humanize
 psutil
 ujson
 wget
-imdbkit
+git+https://github.com/rahuldkjain/imdb-kit.git
 
 # Media / YouTube
 yt-dlp
