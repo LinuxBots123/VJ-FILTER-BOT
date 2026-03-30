@@ -19,6 +19,7 @@ humanize
 psutil
 ujson
 wget
+imdbkit
 
 # Media / YouTube
 yt-dlp
