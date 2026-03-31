@@ -212,6 +212,23 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
 
                 current += 1
 
+                # ✅ Progress update FIX
+                if current % 30 == 0:
+                    try:
+                        await msg.edit_text(
+                            text=f"Total fetched: <code>{current}</code>\n"
+                                 f"Saved: <code>{total_files}</code>\n"
+                                 f"Duplicate: <code>{duplicate}</code>\n"
+                                 f"Deleted: <code>{deleted}</code>\n"
+                                 f"Skipped: <code>{no_media + unsupported}</code>\n"
+                                 f"Errors: <code>{errors}</code>",
+                            reply_markup=InlineKeyboardMarkup(
+                                [[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]
+                            )
+                        )
+                    except MessageNotModified:
+                        pass
+
                 if message.empty:
                     deleted += 1
                     continue
@@ -234,19 +251,16 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     unsupported += 1
                     continue
 
-                # ================= CLEANING =================
-                pattern = r'@\w+'
+                # ✅ CLEAN FIX (MNTGX + @tags)
+                pattern = r'@\w+|\bMNTGX\b'
 
-                # caption clean
                 if message.caption:
                     media.caption = re.sub(pattern, '', message.caption, flags=re.IGNORECASE).strip()
                 else:
                     media.caption = None
 
-                # file name clean
                 if hasattr(media, "file_name") and media.file_name:
                     media.file_name = re.sub(pattern, '', media.file_name, flags=re.IGNORECASE).strip()
-                # ===========================================
 
                 aynav, vnay = await save_file(media)
 
@@ -256,6 +270,9 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     duplicate += 1
                 elif vnay == 2:
                     errors += 1
+
+                # ✅ FloodWait fix
+                await asyncio.sleep(0.2)
 
         except Exception as e:
             logger.exception(e)
@@ -268,4 +285,4 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 f'Deleted: <code>{deleted}</code>\n'
                 f'Skipped: <code>{no_media + unsupported}</code>\n'
                 f'Errors: <code>{errors}</code>'
-            )
+    )
