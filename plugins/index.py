@@ -206,36 +206,11 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
             temp.CANCEL = False
 
             async for message in bot.iter_messages(chat, lst_msg_id, temp.CURRENT):
+
                 if temp.CANCEL:
-                    await msg.edit(
-                        f"Successfully Cancelled!!\n\n"
-                        f"Saved <code>{total_files}</code> files to dataBase!\n"
-                        f"Duplicate Files Skipped: <code>{duplicate}</code>\n"
-                        f"Deleted Messages Skipped: <code>{deleted}</code>\n"
-                        f"Non-Media messages skipped: <code>{no_media + unsupported}</code>"
-                        f"(Unsupported Media - `{unsupported}` )\n"
-                        f"Errors Occurred: <code>{errors}</code>"
-                    )
                     break
 
                 current += 1
-
-                if current % 30 == 0:
-                    try:
-                        await msg.edit_text(
-                            text=f"Total messages fetched: <code>{current}</code>\n"
-                                 f"Total messages saved: <code>{total_files}</code>\n"
-                                 f"Duplicate Files Skipped: <code>{duplicate}</code>\n"
-                                 f"Deleted Messages Skipped: <code>{deleted}</code>\n"
-                                 f"Non-Media messages skipped: <code>{no_media + unsupported}</code>"
-                                 f"(Unsupported Media - `{unsupported}` )\n"
-                                 f"Errors Occurred: <code>{errors}</code>",
-                            reply_markup=InlineKeyboardMarkup(
-                                [[InlineKeyboardButton('Cancel', callback_data='index_cancel')]]
-                            )
-                        )
-                    except MessageNotModified:
-                        pass
 
                 if message.empty:
                     deleted += 1
@@ -259,7 +234,20 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     unsupported += 1
                     continue
 
-                media.caption = message.caption
+                # ================= CLEANING =================
+                pattern = r'@\w+'
+
+                # caption clean
+                if message.caption:
+                    media.caption = re.sub(pattern, '', message.caption, flags=re.IGNORECASE).strip()
+                else:
+                    media.caption = None
+
+                # file name clean
+                if hasattr(media, "file_name") and media.file_name:
+                    media.file_name = re.sub(pattern, '', media.file_name, flags=re.IGNORECASE).strip()
+                # ===========================================
+
                 aynav, vnay = await save_file(media)
 
                 if aynav:
@@ -271,28 +259,13 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
 
         except Exception as e:
             logger.exception(e)
-
-            k = await msg.edit(f'Error: {e}')
-
-            await k.reply_text(
-                f'Succesfully saved <code>{total_files}</code> to dataBase!\n'
-                f'Duplicate Files Skipped: <code>{duplicate}</code>\n'
-                f'Deleted Messages Skipped: <code>{deleted}</code>\n'
-                f'Non-Media messages skipped: <code>{no_media + unsupported}</code>'
-                f'(Unsupported Media - `{unsupported}` )\n'
-                f'Errors Occurred: <code>{errors}</code>'
-            )
-
-            await k.reply_text(
-                "**If You Get Message Not Modified Error Then Skip Your Saved File Then Index Again**"
-            )
+            await msg.edit(f'Error: {e}')
 
         else:
             await msg.edit(
-                f'Succesfully saved <code>{total_files}</code> to dataBase!\n'
-                f'Duplicate Files Skipped: <code>{duplicate}</code>\n'
-                f'Deleted Messages Skipped: <code>{deleted}</code>\n'
-                f'Non-Media messages skipped: <code>{no_media + unsupported}</code>'
-                f'(Unsupported Media - `{unsupported}` )\n'
-                f'Errors Occurred: <code>{errors}</code>'
+                f'Succesfully saved <code>{total_files}</code>\n'
+                f'Duplicate: <code>{duplicate}</code>\n'
+                f'Deleted: <code>{deleted}</code>\n'
+                f'Skipped: <code>{no_media + unsupported}</code>\n'
+                f'Errors: <code>{errors}</code>'
             )
