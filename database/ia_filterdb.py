@@ -27,7 +27,7 @@ async def save_file(media):
     # 🔥 CLEAN CAPTION
     caption = None
     if media.caption:
-        caption = re.sub(r'@\w+', '', str(media.caption), flags=re.IGNORECASE).strip()
+        caption = re.sub(r'@\w+|\bMNTGX\b', '', str(media.caption), flags=re.IGNORECASE).strip()
 
     file = {
         'file_id': file_id,
@@ -67,8 +67,8 @@ def clean_file_name(file_name):
 
     file_name = str(file_name)
 
-    # 🔥 REMOVE @tags
-    file_name = re.sub(r'@\w+', '', file_name, flags=re.IGNORECASE)
+    # 🔥 REMOVE @tags + MNTGX
+    file_name = re.sub(r'@\w+|\bMNTGX\b', '', file_name, flags=re.IGNORECASE)
 
     # Existing cleaning
     file_name = re.sub(r"(_|\-|\.|\+)", " ", file_name)
@@ -77,7 +77,7 @@ def clean_file_name(file_name):
     for char in unwanted_chars:
         file_name = file_name.replace(char, '')
 
-    # Remove links & leftover junk
+    # Remove links & junk
     file_name = ' '.join(
         filter(
             lambda x: not x.startswith('http') and not x.startswith('www.') and not x.startswith('t.me'),
@@ -190,8 +190,7 @@ async def get_bad_files(query, file_type=None, use_filter=False):
 async def get_file_details(query):
     result = col.find_one({'file_id': query})
     if not result and MULTIPLE_DATABASE:
-        result = sec_col.find_one({'file_id': query}
-)
+        result = sec_col.find_one({'file_id': query})
     return result
 
 
