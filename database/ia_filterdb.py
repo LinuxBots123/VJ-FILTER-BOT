@@ -77,13 +77,22 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# ✅ MAIN SEARCH FIX
+# ✅ MAIN SEARCH FIX (OPTIMIZED)
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip().lower()
 
+    # Projection for faster response
+    projection = {
+        'file_id': 1,
+        'file_name': 1,
+        'file_size': 1,
+        'caption': 1,
+        '_id': 0
+    }
+
     if not query:
-        cursor = col.find({}).skip(offset).limit(max_results)
+        cursor = col.find({}, projection).sort('_id', -1).skip(offset).limit(max_results)
         files = list(cursor)
         total_results = col.count_documents({})
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
@@ -94,24 +103,35 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     query = re.sub(r'\be(\d{1})\b', r'e0\1', query)
 
     keywords = query.split()
-    regex_pattern = ".*".join(keywords)
 
+    # Faster AND-based regex (index friendly)
     search_filter = {
-        'file_name': {
-            '$regex': regex_pattern,
-            '$options': 'i'
-        }
+        '$and': [
+            {'file_name': {'$regex': re.escape(k), '$options': 'i'}}
+            for k in keywords
+        ]
     }
 
     if MULTIPLE_DATABASE:
-        cursor1 = col.find(search_filter).skip(offset).limit(max_results)
-        cursor2 = sec_col.find(search_filter).skip(offset).limit(max_results)
+        import asyncio
 
-        files = list(cursor1) + list(cursor2)
+        async def fetch(cursor):
+            return list(cursor)
+
+        cursor1 = col.find(search_filter, projection).sort('_id', -1).skip(offset).limit(max_results)
+        cursor2 = sec_col.find(search_filter, projection).sort('_id', -1).skip(offset).limit(max_results)
+
+        files1, files2 = await asyncio.gather(
+            fetch(cursor1),
+            fetch(cursor2)
+        )
+
+        files = files1 + files2
+
         total_results = col.count_documents(search_filter) + sec_col.count_documents(search_filter)
 
     else:
-        cursor = col.find(search_filter).skip(offset).limit(max_results)
+        cursor = col.find(search_filter, projection).sort('_id', -1).skip(offset).limit(max_results)
         files = list(cursor)
         total_results = col.count_documents(search_filter)
 
@@ -119,17 +139,17 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     return files, next_offset, total_results
 
 
-# ✅ FIXED (RESTORED FUNCTION)
+# ✅ FIXED (RESTORED FUNCTION + OPTIMIZED)
 async def get_bad_files(query, file_type=None, use_filter=False):
 
     query = query.strip().lower()
 
     if not query:
         if MULTIPLE_DATABASE:
-            files = list(col.find({})) + list(sec_col.find({}))
+            files = list(col.find({}, {'_id': 0})) + list(sec_col.find({}, {'_id': 0}))
             total_results = col.count_documents({}) + sec_col.count_documents({})
         else:
-            files = list(col.find({}))
+            files = list(col.find({}, {'_id': 0}))
             total_results = col.count_documents({})
         return files, total_results
 
@@ -137,20 +157,27 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     query = re.sub(r'\be(\d{1})\b', r'e0\1', query)
 
     keywords = query.split()
-    regex_pattern = ".*".join(keywords)
 
     search_filter = {
-        'file_name': {
-            '$regex': regex_pattern,
-            '$options': 'i'
-        }
+        '$and': [
+            {'file_name': {'$regex': re.escape(k), '$options': 'i'}}
+            for k in keywords
+        ]
+    }
+
+    projection = {
+        'file_id': 1,
+        'file_name': 1,
+        'file_size': 1,
+        'caption': 1,
+        '_id': 0
     }
 
     if MULTIPLE_DATABASE:
-        files = list(col.find(search_filter)) + list(sec_col.find(search_filter))
+        files = list(col.find(search_filter, projection)) + list(sec_col.find(search_filter, projection))
         total_results = col.count_documents(search_filter) + sec_col.count_documents(search_filter)
     else:
-        files = list(col.find(search_filter))
+        files = list(col.find(search_filter, projection))
         total_results = col.count_documents(search_filter)
 
     return files, total_results
