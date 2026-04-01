@@ -148,7 +148,8 @@ async def send_for_index(bot, message):
                 'Make sure iam an admin in the chat and have permission to invite users.'
             )
     else:
-        link = f"@{message.forward_from_chat.username}"
+        # ✅ FIXED HERE
+        link = f"@{chat_id}"
 
     buttons = [
         [InlineKeyboardButton(
@@ -161,10 +162,15 @@ async def send_for_index(bot, message):
         )]
     ]
 
+    # ✅ SAFE MENTION FIX
+    user = message.from_user
+    mention = user.mention if user else "Unknown"
+    user_id = user.id if user else "N/A"
+
     await bot.send_message(
         LOG_CHANNEL,
         f'#IndexRequest\n\n'
-        f'By : {message.from_user.mention} (<code>{message.from_user.id}</code>)\n'
+        f'By : {mention} (<code>{user_id}</code>)\n'
         f'Chat ID/ Username - <code>{chat_id}</code>\n'
         f'Last Message ID - <code>{last_msg_id}</code>\n'
         f'InviteLink - {link}',
@@ -212,7 +218,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
 
                 current += 1
 
-                # ✅ Progress update FIX
                 if current % 30 == 0:
                     try:
                         await msg.edit_text(
@@ -251,7 +256,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                     unsupported += 1
                     continue
 
-                # ✅ CLEAN FIX (MNTGX + @tags)
                 pattern = r'@\w+|\bMNTGX\b'
 
                 if message.caption:
@@ -271,7 +275,6 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 elif vnay == 2:
                     errors += 1
 
-                # ✅ FloodWait fix
                 await asyncio.sleep(0.2)
 
         except Exception as e:
@@ -285,4 +288,4 @@ async def index_files_to_db(lst_msg_id, chat, msg, bot):
                 f'Deleted: <code>{deleted}</code>\n'
                 f'Skipped: <code>{no_media + unsupported}</code>\n'
                 f'Errors: <code>{errors}</code>'
-    )
+            )
