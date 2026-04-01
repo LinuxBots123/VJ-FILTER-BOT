@@ -286,7 +286,7 @@ async def years_cb_handler(client: Client, query: CallbackQuery):
     _, key = query.data.split("#")
     search = normalize_query(FRESH.get(key))
     try:
-        
+        pass
     except:
         pass
     btn = []
