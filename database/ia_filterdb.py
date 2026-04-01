@@ -1,4 +1,4 @@
-import re, base64, json
+import re, base64
 from struct import pack
 from pyrogram.file_id import FileId
 from pymongo import MongoClient
@@ -37,7 +37,6 @@ async def save_file(media):
 
     try:
         col.insert_one(file)
-        print(f"{file_name} saved")
         return True, 1
 
     except DuplicateKeyError:
@@ -78,7 +77,7 @@ def is_file_already_saved(file_id, file_name):
     return False
 
 
-# 🔥 FULLY FIXED SEARCH (IMPORTANT)
+# ✅ MAIN SEARCH FIX
 async def get_search_results(chat_id, query, file_type=None, max_results=10, offset=0, filter=False):
 
     query = query.strip().lower()
@@ -90,7 +89,7 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
 
-    # 🔥 NORMALIZE S/E
+    # Normalize S/E
     query = re.sub(r'\bs(\d{1})\b', r's0\1', query)
     query = re.sub(r'\be(\d{1})\b', r'e0\1', query)
 
@@ -109,7 +108,6 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         cursor2 = sec_col.find(search_filter).skip(offset).limit(max_results)
 
         files = list(cursor1) + list(cursor2)
-
         total_results = col.count_documents(search_filter) + sec_col.count_documents(search_filter)
 
     else:
@@ -119,6 +117,43 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
 
     next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
     return files, next_offset, total_results
+
+
+# ✅ FIXED (RESTORED FUNCTION)
+async def get_bad_files(query, file_type=None, use_filter=False):
+
+    query = query.strip().lower()
+
+    if not query:
+        if MULTIPLE_DATABASE:
+            files = list(col.find({})) + list(sec_col.find({}))
+            total_results = col.count_documents({}) + sec_col.count_documents({})
+        else:
+            files = list(col.find({}))
+            total_results = col.count_documents({})
+        return files, total_results
+
+    query = re.sub(r'\bs(\d{1})\b', r's0\1', query)
+    query = re.sub(r'\be(\d{1})\b', r'e0\1', query)
+
+    keywords = query.split()
+    regex_pattern = ".*".join(keywords)
+
+    search_filter = {
+        'file_name': {
+            '$regex': regex_pattern,
+            '$options': 'i'
+        }
+    }
+
+    if MULTIPLE_DATABASE:
+        files = list(col.find(search_filter)) + list(sec_col.find(search_filter))
+        total_results = col.count_documents(search_filter) + sec_col.count_documents(search_filter)
+    else:
+        files = list(col.find(search_filter))
+        total_results = col.count_documents(search_filter)
+
+    return files, total_results
 
 
 async def get_file_details(query):
