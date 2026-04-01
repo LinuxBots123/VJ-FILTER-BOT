@@ -24,13 +24,13 @@ async def save_file(media):
 
     file_id = unpack_new_file_id(media.file_id)
     file_name = clean_file_name(media.file_name)
-    new_file_name = f"@VJ_Bots {file_name}"
+    new_file_name = file_name
 
     file = {
         'file_id': file_id,
         'file_name': new_file_name,
         'file_size': media.file_size,
-        'caption': media.caption.html if media.caption else None
+        'caption': str(media.caption) if media.caption else None   # ✅ FIXED HERE
     }
 
     if is_file_already_saved(file_id, file_name):
@@ -83,12 +83,10 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     query = query.strip()
     
     if not query:
-        # Return recent files with estimated count (fastest)
         filter_criteria = {}
         files = []
         
         if MULTIPLE_DATABASE:
-            # Parallel execution for speed
             cursor1 = col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
             cursor2 = sec_col.find(filter_criteria).sort('$natural', -1).skip(offset).limit(max_results)
             
@@ -102,36 +100,25 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
         next_offset = "" if (offset + max_results) >= total_results else (offset + max_results)
         return files, next_offset, total_results
 
-    # FAST TEXT SEARCH - using MongoDB's text index
-    # Split query into keywords
     keywords = query.lower().split()
-    
-    # Create text search query that REQUIRES all keywords
-    # Using double quotes makes each keyword required
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
-    # Use text search with relevance scoring
     if MULTIPLE_DATABASE:
-        # Search in first database
         cursor1 = col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
-        # Search in second database
         cursor2 = sec_col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
         ).sort([('score', {'$meta': 'textScore'})]).skip(offset).limit(max_results)
         
-        # Combine results
         files = list(cursor1) + list(cursor2)
         
-        # Get total count (fast with text index)
         total_results = col.count_documents({'$text': {'$search': text_query}}) + \
                        sec_col.count_documents({'$text': {'$search': text_query}})
     else:
-        # Single database search
         cursor = col.find(
             {'$text': {'$search': text_query}},
             {'score': {'$meta': 'textScore'}}
@@ -148,7 +135,6 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     query = query.strip()
 
     if not query:
-        # Return all files with estimated count
         if MULTIPLE_DATABASE:
             files = list(col.find({})) + list(sec_col.find({}))
             total_results = col.estimated_document_count() + sec_col.estimated_document_count()
@@ -157,12 +143,10 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             total_results = col.estimated_document_count()
         return files, total_results
 
-    # Use text search for fast results
     keywords = query.lower().split()
     text_query = ' '.join([f'"{kw}"' for kw in keywords])
     
     if MULTIPLE_DATABASE:
-        # Search both databases
         files = list(col.find({'$text': {'$search': text_query}})) + \
                 list(sec_col.find({'$text': {'$search': text_query}}))
         
@@ -170,11 +154,10 @@ async def get_bad_files(query, file_type=None, use_filter=False):
                        sec_col.count_documents({'$text': {'$search': text_query}})
         
         if USE_CAPTION_FILTER:
-            # Also search in captions if enabled
             caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}})) + \
                            list(sec_col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
             files.extend(caption_files)
-            # Remove duplicates while preserving order
+
             seen = set()
             unique_files = []
             for f in files:
@@ -184,14 +167,13 @@ async def get_bad_files(query, file_type=None, use_filter=False):
             files = unique_files
             total_results = len(files)
     else:
-        # Single database search
         files = list(col.find({'$text': {'$search': text_query}}))
         total_results = col.count_documents({'$text': {'$search': text_query}})
         
         if USE_CAPTION_FILTER:
             caption_files = list(col.find({'caption': {'$regex': text_query, '$options': 'i'}}))
             files.extend(caption_files)
-            # Remove duplicates
+
             seen = set()
             unique_files = []
             for f in files:
@@ -204,7 +186,6 @@ async def get_bad_files(query, file_type=None, use_filter=False):
     return files, total_results
 
 async def get_file_details(query):
-    """Get file details by file_id"""
     result = col.find_one({'file_id': query})
     if not result and MULTIPLE_DATABASE:
         result = sec_col.find_one({'file_id': query})
@@ -224,7 +205,6 @@ def encode_file_id(s: bytes) -> str:
     return base64.urlsafe_b64encode(r).decode().rstrip("=")
 
 def unpack_new_file_id(new_file_id):
-    """Return file_id from new file_id format"""
     decoded = FileId.decode(new_file_id)
     file_id = encode_file_id(
         pack(
