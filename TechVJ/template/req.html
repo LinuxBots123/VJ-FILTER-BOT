@@ -3,22 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DreamXbotz | {{file_name}}</title>
-    <!-- Favicon -->
+    <title>{{file_name}}</title>
     <link rel="shortcut icon" href="https://i.ibb.co/qJyZWCv/20230629-081948-0000.png" type="image/x-icon">
-    <meta property="og:image" content="https://i.ibb.co/qJyZWCv/20230629-081948-0000.png" itemprop="thumbnailUrl">
     
-    <!-- Fonts & Icons -->
+    <!-- Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
-    <script src="https://unpkg.com/lucide@latest"></script>
     
-    <!-- Animation Library -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/wow/1.1.2/wow.min.js"></script>
-
+    <!-- Plyr CSS -->
+    <link rel="stylesheet" href="https://cdn.plyr.io/3.7.8/plyr.css" />
+    
     <style>
         :root {
             --bg-primary: rgb(2, 6, 23);
@@ -61,61 +56,29 @@
             backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border-subtle);
         }
+
         .header-content {
             max-width: 1100px;
             margin: 0 auto;
             padding: 1rem 1.5rem;
             display: flex;
             align-items: center;
-            justify-content: space-between;
-        }
-        .logo {
-            font-family: "JetBrains Mono", monospace;
-            font-size: 1.5rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-decoration: none;
-        }
-        .nav { display: flex; gap: 2rem; }
-        .nav a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.875rem;
-            font-weight: 500;
-            transition: color 0.2s;
-        }
-        .nav a:hover { color: var(--accent-rose); }
-        .mobile-menu {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            cursor: pointer;
+            justify-content: center;
         }
 
-        /* Slogan */
-        .slogan {
-            text-align: center;
-            padding: 6.5rem 1.5rem 0.5rem;
-            font-size: 1rem;
+        .logo {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 1.25rem;
             font-weight: 600;
-        }
-        .slogan-text { color: var(--text-secondary); }
-        .slogan-highlight {
-            background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber));
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
+            color: var(--text-secondary);
+            text-decoration: none;
         }
 
         /* Container */
         .container {
             max-width: 1100px;
             margin: 0 auto;
-            padding: 2rem 1.5rem 3rem;
+            padding: 5rem 1.5rem 3rem;
         }
 
         /* Player */
@@ -127,6 +90,7 @@
             border: 1px solid var(--border-subtle);
             box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
         }
+
         .video-container {
             position: relative;
             width: 100%;
@@ -134,7 +98,9 @@
             background: #000;
             overflow: hidden;
         }
-        .video-container video, .video-container .plyr {
+
+        .video-container video,
+        .video-container .plyr {
             position: absolute;
             top: 0;
             left: 0;
@@ -152,18 +118,21 @@
             padding: 1.75rem;
             margin-bottom: 1.5rem;
         }
+
         .file-title {
             font-size: 1.5rem;
             font-weight: 700;
             margin-bottom: 1rem;
             word-break: break-word;
         }
+
         .file-meta {
             display: flex;
             gap: 1rem;
             flex-wrap: wrap;
             margin-bottom: 1.5rem;
         }
+
         .meta-tag {
             display: inline-flex;
             align-items: center;
@@ -180,9 +149,10 @@
         /* Buttons */
         .actions {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
             gap: 0.75rem;
         }
+
         .btn {
             display: flex;
             align-items: center;
@@ -199,27 +169,39 @@
             cursor: pointer;
             transition: all 0.2s;
         }
+
         .btn:hover {
             background: rgba(244, 63, 94, 0.1);
             border-color: var(--accent-rose);
             transform: translateY(-1px);
         }
+
         .btn-primary {
             background: linear-gradient(135deg, var(--accent-rose), rgb(225, 29, 72));
             border-color: transparent;
         }
+
         .btn-primary:hover {
             box-shadow: 0 8px 20px rgba(244, 63, 94, 0.3);
         }
-        .btn img { width: 18px; height: 18px; }
+
+        .btn img {
+            width: 18px;
+            height: 18px;
+        }
 
         /* Dropdown */
-        .dropdown { position: relative; }
+        .dropdown {
+            position: relative;
+        }
+
         .dropdown-menu {
             position: absolute;
             bottom: calc(100% + 0.5rem);
             right: 0;
-            min-width: 200px;
+            min-width: 220px;
+            max-height: 60vh;
+            overflow-y: auto;
             background: var(--bg-glass-dark);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border-normal);
@@ -231,114 +213,44 @@
             transition: all 0.2s;
             z-index: 100;
         }
+
         .dropdown-menu.active {
             opacity: 1;
             visibility: visible;
             transform: translateY(0);
         }
+
         .dropdown-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 0.5rem;
         }
+
         .player-link {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            padding: 0.5rem;
+            padding: 0.5rem 0.625rem;
             background: rgba(30, 41, 59, 0.4);
             border: 1px solid var(--border-subtle);
             border-radius: 6px;
             color: var(--text-secondary);
             text-decoration: none;
             font-size: 0.8125rem;
+            font-weight: 500;
             transition: all 0.2s;
         }
+
         .player-link:hover {
             background: rgba(244, 63, 94, 0.1);
             border-color: var(--accent-rose);
             color: var(--accent-rose);
         }
 
-        /* Cards Section */
-        .cards-section { margin: 3rem 0; }
-        .section-header { text-align: center; margin-bottom: 2.5rem; }
-        .section-title {
-            font-size: 2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--accent-rose), var(--accent-amber));
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .cards-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 1.5rem;
-        }
-        .card {
-            background: var(--bg-glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-subtle);
-            border-radius: 12px;
-            padding: 2rem;
-            transition: all 0.3s;
-        }
-        .card:hover {
-            border-color: var(--accent-rose);
-            transform: translateY(-4px);
-        }
-        .card-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(244, 63, 94, 0.1);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 1.25rem;
-            color: var(--accent-rose);
-        }
-        .card h3 { font-size: 1.25rem; margin-bottom: 0.75rem; }
-        .card p { color: var(--text-secondary); font-size: 0.875rem; margin-bottom: 1.5rem; }
-        .card-links { display: flex; flex-direction: column; gap: 0.5rem; }
-        .card-link {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0.625rem 0.875rem;
-            background: rgba(30, 41, 59, 0.4);
-            border: 1px solid var(--border-subtle);
-            border-radius: 6px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.8125rem;
-            transition: all 0.2s;
-        }
-        .card-link:hover {
-            background: rgba(244, 63, 94, 0.1);
-            border-color: var(--accent-rose);
-            color: var(--accent-rose);
-        }
-
-        /* Footer */
-        .footer {
-            text-align: center;
-            padding: 2.5rem 1.5rem;
-            border-top: 1px solid var(--border-subtle);
-            color: var(--text-muted);
-            font-size: 0.875rem;
-        }
-        .footer a { color: var(--accent-rose); text-decoration: none; }
-
-        /* Plyr Customization */
-        .plyr {
-            --plyr-color-main: rgb(244, 63, 94);
-            border-radius: 0 0 16px 16px;
-        }
-        .plyr__menu {
-            background: var(--bg-glass-dark) !important;
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border-normal);
+        .player-link img {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
         }
 
         /* Audio Warning */
@@ -349,244 +261,553 @@
             border-radius: 8px;
             font-size: 0.875rem;
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             justify-content: center;
             gap: 6px;
             margin: 1.5rem 0;
+            text-align: center;
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 2.5rem 1.5rem;
+            border-top: 1px solid var(--border-subtle);
+            color: var(--text-muted);
+            font-size: 0.875rem;
+        }
+
+        .footer a {
+            color: var(--accent-rose);
+            text-decoration: none;
+        }
+
+        /* Plyr Customization */
+        .plyr {
+            --plyr-color-main: rgb(244, 63, 94);
+            border-radius: 0 0 16px 16px;
+        }
+
+        .plyr__control {
+            color: white;
+        }
+
+        .plyr__control:hover {
+            background: rgba(244, 63, 94, 0.2);
+        }
+
+        .plyr__control--overlaid {
+            background: rgba(244, 63, 94, 0.9);
+        }
+
+        .plyr__menu {
+            background: var(--bg-glass-dark) !important;
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-normal);
+            border-radius: 8px;
+        }
+
+        .plyr__menu__container .plyr__control {
+            color: var(--text-primary);
+        }
+
+        .plyr__menu__container .plyr__control:hover {
+            background: rgba(244, 63, 94, 0.1);
+        }
+
+        .plyr__menu__container .plyr__control[role="menuitemradio"][aria-checked="true"]::before {
+            background: var(--accent-rose);
+        }
+
+        /* Aspect Ratio Dropdown */
+        .aspect-dropdown {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            right: 0;
+            min-width: 180px;
+            background: var(--bg-glass-dark);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-normal);
+            border-radius: 8px;
+            padding: 0.5rem;
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(10px);
+            transition: all 0.2s;
+            z-index: 1000;
+        }
+
+        .aspect-dropdown.active {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .aspect-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.5rem 0.75rem;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.8125rem;
+            transition: all 0.2s;
+        }
+
+        .aspect-item:hover {
+            background: rgba(244, 63, 94, 0.1);
+            color: var(--accent-rose);
+        }
+
+        .aspect-item.active {
+            background: rgba(244, 63, 94, 0.2);
+            color: var(--accent-rose);
         }
 
         /* Mobile Adjustments */
         @media (max-width: 768px) {
-            .nav {
-                display: none;
-                position: absolute;
-                top: 100%;
-                left: 0;
-                right: 0;
-                background: var(--bg-glass-dark);
-                flex-direction: column;
-                padding: 1rem;
-                border-bottom: 1px solid var(--border-subtle);
-                backdrop-filter: blur(20px);
+            .container {
+                padding: 4rem 1rem 2rem;
             }
-            .nav.active { display: flex; }
-            .mobile-menu { display: block; }
-            .slogan { padding: 5rem 1rem 0.5rem; }
-            .container { padding: 1rem 1rem 2rem; }
-            .actions { grid-template-columns: 1fr; }
-            .actions .dropdown-menu { width: 100%; left: 50%; transform: translateX(-50%) translateY(10px); }
-            .actions .dropdown-menu.active { transform: translateX(-50%) translateY(0); }
-            .file-title { font-size: 1.2rem; }
+
+            .player-wrapper {
+                margin-bottom: 2rem;
+            }
+
+            .info-card {
+                padding: 1.5rem;
+            }
+
+            .file-title {
+                font-size: 1.2rem;
+            }
+
+            .actions {
+                grid-template-columns: 1fr;
+            }
+
+            .actions .dropdown-menu {
+                width: 100%;
+                min-width: 250px;
+                left: 50%;
+                transform: translateX(-50%) translateY(10px);
+            }
+
+            .actions .dropdown-menu.active {
+                transform: translateX(-50%) translateY(0);
+            }
+
+            .btn {
+                padding: 0.75rem 1rem;
+            }
+
+            .audio-warning {
+                font-size: 0.75rem;
+                padding: 8px 12px;
+            }
+
+            .plyr__control[data-plyr="pip"],
+            .plyr__control[data-plyr="airplay"] {
+                display: none;
+            }
+
+            .plyr__volume {
+                display: none !important;
+            }
         }
 
-        /* Credit Banner */
-        .credit-banner {
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-secondary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-rose);
+        }
+
+        /* Credit */
+        .credit {
             margin-top: 2rem;
+            text-align: center;
             font-size: 0.75rem;
             color: var(--text-muted);
-            text-align: center;
-            border-top: 1px solid var(--border-subtle);
-            padding-top: 1.5rem;
+            opacity: 0.5;
         }
-        .credit-banner a { color: var(--accent-rose-light); }
     </style>
 </head>
 <body>
 
 <header class="header">
     <div class="header-content">
-        <a href="https://t.me/dreamxbotz" class="logo">DreamXbotz</a>
-        <nav class="nav">
-            <a href="#video-section">Stream</a>
-            <a href="#explore">Explore</a>
-            <a href="https://t.me/dreamxbotz">Contact</a>
-        </nav>
-        <button class="mobile-menu">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="3" y1="12" x2="21" y2="12"></line>
-                <line x1="3" y1="6" x2="21" y2="6"></line>
-                <line x1="3" y1="18" x2="21" y2="18"></line>
-            </svg>
-        </button>
+        <span class="logo">Stream Player</span>
     </div>
 </header>
 
-<div class="slogan">
-    <span class="slogan-text">Stream Effortlessly,</span> 
-    <span class="slogan-highlight">Anytime, Anywhere</span>
-</div>
-
 <div class="container">
-    <section id="video-section" class="fade-in">
-        <div class="player-wrapper">
-            <div class="video-container">
-                <video id="player" class="mkv-player" playsinline controls data-poster="https://i.ibb.co/MxYbt8M1/x.jpg">
-                    <source src="{{file_url}}" />
-                </video>
-            </div>
+    <div class="player-wrapper">
+        <div class="video-container">
+            <video id="player" playsinline controls>
+                <source src="{{file_url}}" />
+            </video>
+        </div>
+    </div>
+
+    <div class="info-card">
+        <h1 class="file-title">{{file_name}}</h1>
+        
+        <div class="file-meta">
+            <span class="meta-tag">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Now Streaming
+            </span>
         </div>
 
-        <div class="info-card">
-            <h1 class="file-title">{{file_name}}</h1>
-            <div class="file-meta">
-                <span class="meta-tag">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <circle cx="12" cy="12" r="10"></circle>
-                        <polyline points="12 6 12 12 16 14"></polyline>
-                    </svg>
-                    Now Streaming
-                </span>
-            </div>
+        <div class="actions">
+            <button class="btn btn-primary" onclick="downloadFile()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+                Download
+            </button>
 
-            <div class="actions">
-                <button class="btn btn-primary" onclick="blazeDownload()">
+            <button class="btn" onclick="vlc_player()">
+                <img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="VLC" />
+                VLC Player
+            </button>
+
+            <button class="btn" onclick="mx_player()">
+                <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX" />
+                MX Player
+            </button>
+
+            <div class="dropdown">
+                <button class="btn" onclick="toggleDropdown()">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                        <circle cx="12" cy="12" r="1"></circle>
+                        <circle cx="19" cy="12" r="1"></circle>
+                        <circle cx="5" cy="12" r="1"></circle>
                     </svg>
-                    Download
+                    More Players
                 </button>
-                <button class="btn" onclick="vlc_player()">
-                    <img src="https://i.postimg.cc/15TQ4y7B/vlc.png" alt="VLC" /> VLC Player
-                </button>
-                <button class="btn" onclick="mx_player()">
-                    <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX" /> MX Player
-                </button>
-                <div class="dropdown">
-                    <button class="btn" onclick="toggleDropdown()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
-                            <circle cx="12" cy="12" r="1"></circle>
-                            <circle cx="19" cy="12" r="1"></circle>
-                            <circle cx="5" cy="12" r="1"></circle>
-                        </svg>
-                        More Players
-                    </button>
-                    <div class="dropdown-menu" id="players-dropdown">
-                        <div class="dropdown-grid">
-                            <a href="#" class="player-link" onclick="playit_player()">
-                                <img src="https://i.postimg.cc/RVGWYJFF/playit.png" alt="PLAYit" /> PLAYit
-                            </a>
-                            <a href="#" class="player-link" onclick="km_player()">
-                                <img src="https://i.postimg.cc/wT9tFQ9Z/km.png" alt="KM" /> KMPlayer
-                            </a>
-                            <a href="#" class="player-link" onclick="s_player()">
-                                <img src="https://i.postimg.cc/XYJr6NGg/s.png" alt="S" /> S Player
-                            </a>
-                            <a href="#" class="player-link" onclick="hd_player()">
-                                <img src="https://i.postimg.cc/rFT43LNh/hd.png" alt="HD" /> HD Player
-                            </a>
-                            <a href="#" class="player-link" onclick="mx_playerpro()">
-                                <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX Pro" /> MX Pro
-                            </a>
-                        </div>
+
+                <div class="dropdown-menu" id="players-dropdown">
+                    <div class="dropdown-grid">
+                        <a href="#" class="player-link" onclick="playit_player()">
+                            <img src="https://i.postimg.cc/RVGWYJFF/playit.png" alt="PLAYit" />
+                            <span>PLAYit</span>
+                        </a>
+                        <a href="#" class="player-link" onclick="km_player()">
+                            <img src="https://i.postimg.cc/wT9tFQ9Z/km.png" alt="KM" />
+                            <span>KMPlayer</span>
+                        </a>
+                        <a href="#" class="player-link" onclick="s_player()">
+                            <img src="https://i.postimg.cc/XYJr6NGg/s.png" alt="S" />
+                            <span>S Player</span>
+                        </a>
+                        <a href="#" class="player-link" onclick="hd_player()">
+                            <img src="https://i.postimg.cc/rFT43LNh/hd.png" alt="HD" />
+                            <span>HD Player</span>
+                        </a>
+                        <a href="#" class="player-link" onclick="mx_playerpro()">
+                            <img src="https://i.postimg.cc/sx4Msv4T/mx.png" alt="MX Pro" />
+                            <span>MX Pro</span>
+                        </a>
                     </div>
                 </div>
             </div>
-            <!-- Audio Warning Placeholder -->
-            <div id="audio-warning-container"></div>
         </div>
-    </section>
 
-    <section id="explore" class="cards-section">
-        <div class="section-header">
-            <h2 class="section-title">Explore Our Universe</h2>
-            <p class="section-subtitle">Discover our channels and intelligent bots</p>
-        </div>
-        <div class="cards-grid">
-            <div class="card">
-                <div class="card-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-                        <circle cx="9" cy="7" r="4"></circle>
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-                        <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-                    </svg>
-                </div>
-                <h3>Our Channels</h3>
-                <p>Get exclusive content and real-time notifications from our premium channels</p>
-                <div class="card-links">
-                    <a href="https://t.me/dreamxbotz" class="card-link">DreamXbotz <span>→</span></a>
-                    <a href="https://t.me/Blaze_Updatez" class="card-link">Blaze Updates <span>→</span></a>
-                    <a href="https://t.me/anime_cartoon_stickers" class="card-link">Anime Stickers <span>→</span></a>
-                </div>
-            </div>
-            <div class="card">
-                <div class="card-icon">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
-                </div>
-                <h3>Our Bots</h3>
-                <p>Intelligent bots for enhanced streaming and automated assistance</p>
-                <div class="card-links">
-                    <a href="https://t.me/dreamxbotz" class="card-link">DreamXbotz <span>→</span></a>
-                    <a href="https://t.me/Blaze_Moviesposter_downloaderbot" class="card-link">PosterFlix Bot <span>→</span></a>
-                    <a href="https://t.me/video_thumbcover_changerbot" class="card-link">Thumb Changer <span>→</span></a>
-                    <a href="https://t.me/Blaze_forward_bot" class="card-link">Forward Bot Pro <span>→</span></a>
-                </div>
-            </div>
-        </div>
-    </section>
+        <div id="audio-warning-container"></div>
+    </div>
     
-    <!-- Credit Banner (Preserved from original VJ Bot) -->
-    <div class="credit-banner">
-        © 2026 <a href="https://t.me/dreamxbotz">DreamXbotz</a> | Inspired by Tech VJ & VJ Bots<br>
-        <span style="opacity: 0.5;">Don't Remove Credit @VJ_Bots Subscribe YouTube Channel For Amazing Bot @Tech_VJ</span>
+    <div class="credit">
+        Powered by Tech VJ
     </div>
 </div>
 
 <footer class="footer">
-    <p>&copy; 2026 <a href="https://t.me/dreamxbotz">DreamXbotz</a>. All Rights Reserved.</p>
+    <p>&copy; 2026 Stream Player. All Rights Reserved.</p>
 </footer>
 
 <script src="https://cdn.plyr.io/3.7.8/plyr.polyfilled.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+
 <script>
-    // Initialize WOW.js for animations
-    new WOW().init();
-    
     // Global variables
     let plyrPlayer = null;
     const videoElement = document.querySelector("#player");
     const fileUrl = "{{file_url}}";
     const fileName = "{{file_name}}";
 
-    // Clean file name
+    // Generate thumbnail from file URL (for video files)
+    function generateThumbnail() {
+        const url = fileUrl;
+        const ext = url.split('.').pop().toLowerCase();
+        
+        // For video files, we can use a frame at 2 seconds as poster
+        if (['mp4', 'mkv', 'webm', 'mov'].includes(ext)) {
+            const video = document.createElement('video');
+            video.crossOrigin = 'anonymous';
+            video.src = url;
+            video.currentTime = 2;
+            
+            video.addEventListener('loadeddata', function() {
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                try {
+                    const posterUrl = canvas.toDataURL('image/jpeg');
+                    videoElement.setAttribute('data-poster', posterUrl);
+                } catch (e) {
+                    // Fallback to default poster if CORS issues
+                    videoElement.setAttribute('data-poster', 'https://i.ibb.co/MxYbt8M1/x.jpg');
+                }
+            });
+        }
+    }
+
+    // Clean file name for display
     function cleanFileName() {
         const titleEl = document.querySelector(".file-title");
         if (titleEl) {
             let cleaned = titleEl.textContent;
-            cleaned = cleaned.replace(/\./g, " ").replace(/\[|\]|\{|\}|_/g, " ").replace(/\.mkv|\.mp4|mkv|mp4/gi, " ").replace(/\s+/g, " ").trim();
+            cleaned = cleaned
+                .replace(/\./g, " ")
+                .replace(/\[|\]|\{|\}|_/g, " ")
+                .replace(/\.mkv|\.mp4|mkv|mp4/gi, " ")
+                .replace(/\s+/g, " ")
+                .trim();
             titleEl.textContent = cleaned;
         }
     }
 
-    // Initialize Plyr
+    // Initialize Plyr with fullscreen fix
     function initPlyr(video) {
         if (plyrPlayer) return;
         if (typeof Plyr === "undefined") {
             console.error("Plyr not loaded");
             return;
         }
+
         plyrPlayer = new Plyr(video, {
-            controls: ["play-large", "play", "progress", "current-time", "mute", "volume", "pip", "airplay", "fullscreen"]
+            controls: [
+                'play-large',
+                'play',
+                'progress',
+                'current-time',
+                'mute',
+                'volume',
+                'captions',
+                'settings',
+                'pip',
+                'airplay',
+                'fullscreen'
+            ],
+            fullscreen: { enabled: true, fallback: true, iosNative: true },
+            settings: ['quality', 'speed', 'loop']
+        });
+
+        // Add custom controls after Plyr initializes
+        setTimeout(() => addCustomControls(), 200);
+    }
+
+    // Add aspect ratio and speed controls
+    function addCustomControls() {
+        const controls = document.querySelector(".plyr__controls");
+        if (!controls) return;
+
+        const fullscreenBtn = controls.querySelector('[data-plyr="fullscreen"]');
+        if (!fullscreenBtn) return;
+
+        // Speed control
+        const speedBtn = document.createElement("button");
+        speedBtn.className = "plyr__controls__item plyr__control";
+        speedBtn.type = "button";
+        speedBtn.setAttribute("data-plyr", "speed-custom");
+        speedBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span class="plyr__tooltip">Speed</span>
+        `;
+
+        const speedDropdown = document.createElement("div");
+                speedBtn.className = "plyr__controls__item plyr__control";
+        speedBtn.type = "button";
+        speedBtn.setAttribute("data-plyr", "speed-custom");
+        speedBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span class="plyr__tooltip">Speed</span>
+        `;
+
+        const speedDropdown = document.createElement("div");
+        speedDropdown.className = "aspect-dropdown";
+        speedDropdown.innerHTML = `
+            <div class="aspect-item" data-speed="0.5">0.5x</div>
+            <div class="aspect-item" data-speed="0.75">0.75x</div>
+            <div class="aspect-item active" data-speed="1">1x Normal</div>
+            <div class="aspect-item" data-speed="1.25">1.25x</div>
+            <div class="aspect-item" data-speed="1.5">1.5x</div>
+            <div class="aspect-item" data-speed="1.75">1.75x</div>
+            <div class="aspect-item" data-speed="2">2x</div>
+        `;
+
+        controls.insertBefore(speedBtn, fullscreenBtn);
+        speedBtn.appendChild(speedDropdown);
+
+        speedBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            speedDropdown.classList.toggle("active");
+            document.querySelectorAll(".aspect-dropdown.active").forEach(d => {
+                if (d !== speedDropdown) d.classList.remove("active");
+            });
+        });
+
+        speedDropdown.querySelectorAll(".aspect-item").forEach(item => {
+            item.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const speed = parseFloat(item.dataset.speed);
+                videoElement.playbackRate = speed;
+                
+                speedDropdown.querySelectorAll(".aspect-item").forEach(i => i.classList.remove("active"));
+                item.classList.add("active");
+                speedDropdown.classList.remove("active");
+            });
+        });
+
+        // Aspect ratio control
+        const aspectBtn = document.createElement("button");
+        aspectBtn.className = "plyr__controls__item plyr__control";
+        aspectBtn.type = "button";
+        aspectBtn.setAttribute("data-plyr", "aspect-ratio");
+        aspectBtn.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="18" height="18">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+            </svg>
+            <span class="plyr__tooltip">Aspect Ratio</span>
+        `;
+
+        const aspectDropdown = document.createElement("div");
+        aspectDropdown.className = "aspect-dropdown";
+        aspectDropdown.innerHTML = `
+            <div class="aspect-item" data-aspect="original">Original</div>
+            <div class="aspect-item" data-aspect="1">1:1 Square</div>
+            <div class="aspect-item" data-aspect="1.333">4:3 Classic</div>
+            <div class="aspect-item active" data-aspect="1.778">16:9 Wide</div>
+            <div class="aspect-item" data-aspect="1.85">1.85:1 Cinema</div>
+            <div class="aspect-item" data-aspect="2.333">21:9 Ultrawide</div>
+            <div class="aspect-item" data-aspect="cover">Fill Screen</div>
+        `;
+
+        controls.insertBefore(aspectBtn, fullscreenBtn);
+        aspectBtn.appendChild(aspectDropdown);
+
+        aspectBtn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            aspectDropdown.classList.toggle("active");
+            document.querySelectorAll(".aspect-dropdown.active").forEach(d => {
+                if (d !== aspectDropdown) d.classList.remove("active");
+            });
+        });
+
+        aspectDropdown.querySelectorAll(".aspect-item").forEach(item => {
+            item.addEventListener("click", (e) => {
+                e.stopPropagation();
+                const aspect = item.dataset.aspect;
+                const container = document.querySelector(".video-container");
+                
+                if (videoElement && container) {
+                    videoElement.style.width = "100%";
+                    videoElement.style.height = "100%";
+                    videoElement.style.top = "0";
+                    videoElement.style.left = "0";
+                    videoElement.style.transform = "none";
+
+                    if (aspect === "cover") {
+                        videoElement.style.objectFit = "cover";
+                    } else if (aspect === "original") {
+                        videoElement.style.objectFit = "contain";
+                    } else {
+                        const targetRatio = parseFloat(aspect);
+                        const containerRatio = 16 / 9;
+                        
+                        if (targetRatio < containerRatio) {
+                            const widthPercent = (targetRatio / containerRatio) * 100;
+                            videoElement.style.width = `${widthPercent}%`;
+                            videoElement.style.height = "100%";
+                            videoElement.style.left = `${(100 - widthPercent) / 2}%`;
+                            videoElement.style.objectFit = "fill";
+                        } else {
+                            const heightPercent = (containerRatio / targetRatio) * 100;
+                            videoElement.style.width = "100%";
+                            videoElement.style.height = `${heightPercent}%`;
+                            videoElement.style.top = `${(100 - heightPercent) / 2}%`;
+                            videoElement.style.objectFit = "fill";
+                        }
+                    }
+                }
+                
+                aspectDropdown.querySelectorAll(".aspect-item").forEach(i => i.classList.remove("active"));
+                item.classList.add("active");
+                aspectDropdown.classList.remove("active");
+            });
+        });
+
+        // Close dropdowns on outside click
+        document.addEventListener("click", (e) => {
+            if (!speedBtn.contains(e.target)) speedDropdown.classList.remove("active");
+            if (!aspectBtn.contains(e.target)) aspectDropdown.classList.remove("active");
         });
     }
 
-    // Player initialization
+    // Initialize player based on file type
     function initPlayer() {
         if (!videoElement) return;
+        
         const source = videoElement.querySelector("source");
         const url = source?.src || "";
         const ext = url.split(".").pop()?.toLowerCase() || "";
         
+        // Set poster if available, else use default
+        const posterUrl = "https://i.ibb.co/MxYbt8M1/x.jpg";
+        videoElement.setAttribute('data-poster', posterUrl);
+        
+        // Try to generate thumbnail from video
+        generateThumbnail();
+
         if (["flv", "ts"].includes(ext) && typeof mpegts !== "undefined") {
             try {
-                const player = mpegts.createPlayer({ type: "flv", url, isLive: false });
+                const player = mpegts.createPlayer({ 
+                    type: ext === 'flv' ? 'flv' : 'mpegts', 
+                    url, 
+                    isLive: false 
+                });
                 player.attachMediaElement(videoElement);
                 player.load();
+                window.mpegtsPlayer = player;
+                initPlyr(videoElement);
             } catch (err) {
                 console.error("mpegts failed:", err);
                 initPlyr(videoElement);
@@ -609,7 +830,7 @@
                             <line x1="12" y1="9" x2="12" y2="13"></line>
                             <line x1="12" y1="17" x2="12.01" y2="17"></line>
                         </svg>
-                        <span>Browser does not support EAC3 audio. If no sound, please use External Players.</span>
+                        <span>Browser may not support EAC3 audio. If no sound, please use External Players.</span>
                     </div>
                 `;
             }
@@ -621,12 +842,14 @@
         document.getElementById("players-dropdown").classList.toggle("active");
     }
 
-    // External Player Functions (Preserved & Enhanced)
-    function blazeDownload() {
+    // Player functions
+    function downloadFile() {
         const a = document.createElement("a");
         a.href = fileUrl;
         a.download = fileName;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
     }
 
     function vlc_player() {
@@ -668,40 +891,29 @@
         }
     });
 
-    // Mobile Menu Toggle
-    function setupMobileMenu() {
-        const btn = document.querySelector(".mobile-menu");
-        const nav = document.querySelector(".nav");
-        if (btn && nav) {
-            btn.addEventListener("click", (e) => {
-                e.stopPropagation();
-                nav.classList.toggle("active");
-            });
-            nav.querySelectorAll("a").forEach(link => link.addEventListener("click", () => nav.classList.remove("active")));
-            document.addEventListener("click", (e) => {
-                if (!nav.contains(e.target) && !btn.contains(e.target)) nav.classList.remove("active");
-            });
+    // Prevent right-click
+    document.addEventListener("contextmenu", (e) => e.preventDefault());
+    
+    // Prevent dev tools shortcuts
+    document.addEventListener("keydown", (e) => {
+        if (
+            e.key === 'F12' ||
+            (e.ctrlKey && e.shiftKey && e.key === 'I') ||
+            (e.ctrlKey && e.key === 'u') ||
+            (e.ctrlKey && e.key === 'U')
+        ) {
+            e.preventDefault();
         }
-    }
+    });
 
-    // Run on load
+    // Initialize on load
     window.addEventListener("DOMContentLoaded", () => {
         cleanFileName();
         initPlayer();
         checkAudioSupport();
-        setupMobileMenu();
-        
-        // Smooth scroll for anchor links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function(e) {
-                const target = document.querySelector(this.getAttribute('href'));
-                if(target) {
-                    e.preventDefault();
-                    target.scrollIntoView({ behavior: 'smooth' });
-                }
-            });
-        });
     });
 </script>
+
 </body>
 </html>
+        
