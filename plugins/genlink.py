@@ -1,4 +1,4 @@
-# Don't Remove Credit @VJ_Bots
+# Don't Remove Credit @Linux_Bots
 # Subscribe YouTube Channel For Amazing Bot @Tech_VJ
 # Ask Doubt on telegram @KingVJ01
 
@@ -12,6 +12,7 @@ from database.ia_filterdb import unpack_new_file_id
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+
 async def allowed(_, __, message):
     if PUBLIC_FILE_STORE:
         return True
@@ -22,23 +23,24 @@ async def allowed(_, __, message):
 
 @Client.on_message(filters.command(['link', 'plink']) & filters.create(allowed))
 async def gen_link_s(bot, message):
+
     vj = await bot.ask(
         chat_id=message.from_user.id,
-        text="Now Send Me Your Message Which You Want To Store."
+        text="Send the file (video/audio/document) you want to store."
     )
 
     file_type = vj.media
+
     if file_type not in [
         enums.MessageMediaType.VIDEO,
         enums.MessageMediaType.AUDIO,
         enums.MessageMediaType.DOCUMENT
     ]:
-        return await vj.reply("Send me only video,audio,file or document.")
+        return await vj.reply("❌ Only video, audio or document allowed.")
 
     if message.has_protected_content and message.chat.id not in ADMINS:
-        return await message.reply("okDa")
+        return await message.reply("❌ Protected content not allowed.")
 
-    # ✅ FIXED HERE
     file_id = unpack_new_file_id((getattr(vj, file_type.value)).file_id)
 
     string = 'filep_' if message.text.lower().strip() == "/plink" else 'file_'
@@ -47,7 +49,7 @@ async def gen_link_s(bot, message):
     outstr = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
 
     await message.reply(
-        f"Here is your Link:\nhttps://t.me/{temp.U_NAME}?start={outstr}"
+        f"✅ Here is your link:\nhttps://t.me/{temp.U_NAME}?start={outstr}"
     )
 
 
@@ -56,13 +58,14 @@ async def gen_link_batch(bot, message):
 
     if " " not in message.text:
         return await message.reply(
-            "Use correct format.\nExample <code>/batch https://t.me/VJ_Botz/10 https://t.me/VJ_Botz/20</code>."
+            "❌ Use correct format:\n<code>/batch link1 link2</code>"
         )
 
     links = message.text.strip().split(" ")
+
     if len(links) != 3:
         return await message.reply(
-            "Use correct format.\nExample <code>/batch https://t.me/VJ_Botz/10 https://t.me/VJ_Botz/20</code>."
+            "❌ Use correct format:\n<code>/batch link1 link2</code>"
         )
 
     cmd, first, last = links
@@ -71,7 +74,7 @@ async def gen_link_batch(bot, message):
 
     match = regex.match(first)
     if not match:
-        return await message.reply('Invalid link')
+        return await message.reply('❌ Invalid first link')
 
     f_chat_id = match.group(4)
     f_msg_id = int(match.group(5))
@@ -81,7 +84,7 @@ async def gen_link_batch(bot, message):
 
     match = regex.match(last)
     if not match:
-        return await message.reply('Invalid link')
+        return await message.reply('❌ Invalid second link')
 
     l_chat_id = match.group(4)
     l_msg_id = int(match.group(5))
@@ -90,36 +93,30 @@ async def gen_link_batch(bot, message):
         l_chat_id = int("-100" + l_chat_id)
 
     if f_chat_id != l_chat_id:
-        return await message.reply("Chat ids not matched.")
+        return await message.reply("❌ Chat IDs do not match.")
 
     try:
         chat_id = (await bot.get_chat(f_chat_id)).id
     except ChannelInvalid:
-        return await message.reply(
-            'This may be a private channel / group. Make me an admin over there to index the files.'
-        )
+        return await message.reply("❌ Make me admin in that channel/group.")
     except (UsernameInvalid, UsernameNotModified):
-        return await message.reply('Invalid Link specified.')
+        return await message.reply('❌ Invalid link.')
     except Exception as e:
-        return await message.reply(f'Errors - {e}')
+        return await message.reply(f'❌ Error: {e}')
 
-    sts = await message.reply(
-        "Generating link for your message.\nThis may take time depending upon number of messages"
-    )
+    sts = await message.reply("⏳ Generating links... Please wait.")
 
     if chat_id in FILE_STORE_CHANNEL:
         string = f"{f_msg_id}_{l_msg_id}_{chat_id}_{cmd.lower().strip()}"
         b_64 = base64.urlsafe_b64encode(string.encode("ascii")).decode().strip("=")
         return await sts.edit(
-            f"Here is your link https://t.me/{temp.U_NAME}?start=DSTORE-{b_64}"
+            f"✅ Link:\nhttps://t.me/{temp.U_NAME}?start=DSTORE-{b_64}"
         )
 
     outlist = []
     og_msg = 0
-    tot = 0
 
     async for msg in bot.iter_messages(f_chat_id, l_msg_id, f_msg_id):
-        tot += 1
 
         if msg.empty or msg.service:
             continue
@@ -150,21 +147,22 @@ async def gen_link_batch(bot, message):
         except:
             pass
 
-    with open(f"batchmode_{message.from_user.id}.json", "w+") as out:
+    file_path = f"batchmode_{message.from_user.id}.json"
+
+    with open(file_path, "w+") as out:
         json.dump(outlist, out)
 
     post = await bot.send_document(
         LOG_CHANNEL,
-        f"batchmode_{message.from_user.id}.json",
+        file_path,
         file_name="Batch.json",
-        caption="⚠️Generated for filestore."
+        caption="Generated for file store."
     )
 
-    os.remove(f"batchmode_{message.from_user.id}.json")
+    os.remove(file_path)
 
-    # ✅ FIXED HERE
     file_id = unpack_new_file_id(post.document.file_id)
 
     await sts.edit(
-        f"Here is your link\nContains `{og_msg}` files.\n https://t.me/{temp.U_NAME}?start=BATCH-{file_id}"
+        f"✅ Link Generated\nFiles: `{og_msg}`\nhttps://t.me/{temp.U_NAME}?start=BATCH-{file_id}"
     )
