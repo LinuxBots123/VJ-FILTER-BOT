@@ -1,93 +1,94 @@
-# Don't Remove Credit @VJ_Bots
-# Subscribe YouTube Channel For Amazing Bot @Tech_VJ
-# Ask Doubt on telegram @KingVJ01
-
-# Clone Code Credit : YT - @Tech_VJ / TG - @VJ_Bots / GitHub - @VJBots
-
-import sys, glob, importlib, logging, logging.config, pytz, asyncio
+import sys, glob, importlib, logging, logging.config, pytz, asyncio, os
 from pathlib import Path
+from aiohttp import web
+from pyrogram import idle
+from datetime import date, datetime
 
-# Get logging configurations
-logging.config.fileConfig('logging.conf')
-logging.getLogger().setLevel(logging.INFO)
-logging.getLogger("pyrogram").setLevel(logging.ERROR)
-logging.getLogger("cinemagoer").setLevel(logging.ERROR)
+# Logging
+logging.basicConfig(level=logging.INFO)
 
-from pyrogram import Client, idle
+# Import your modules
 from database.users_chats_db import db
 from info import *
 from utils import temp
-from typing import Union, Optional, AsyncGenerator
-from Script import script 
-from datetime import date, datetime 
-from aiohttp import web
-from plugins import web_server
+from Script import script
 from plugins.clone import restart_bots
 
 from TechVJ.bot import TechVJBot
-from TechVJ.util.keepalive import ping_server
 from TechVJ.bot.clients import initialize_clients
+
+# ------------------- IMPORTANT -------------------
+PORT = int(os.environ.get("PORT", 8080))  # Render dynamic port
+# -------------------------------------------------
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)
+
 TechVJBot.start()
 loop = asyncio.get_event_loop()
 
+# ------------------- WEB SERVER -------------------
+async def web_server():
+    app = web.Application()
+
+    async def home(request):
+        return web.Response(text="Bot is running ✅")
+
+    app.router.add_get("/", home)
+    return app
+# -------------------------------------------------
 
 async def start():
-    print('\n')
-    print('Initalizing Your Bot')
-    bot_info = await TechVJBot.get_me()
+    print("🚀 Initializing Your Bot")
+
     await initialize_clients()
+
+    # Load plugins
     for name in files:
-        with open(name) as a:
-            patt = Path(a.name)
-            plugin_name = patt.stem.replace(".py", "")
-            plugins_dir = Path(f"plugins/{plugin_name}.py")
-            import_path = "plugins.{}".format(plugin_name)
-            spec = importlib.util.spec_from_file_location(import_path, plugins_dir)
-            load = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(load)
-            sys.modules["plugins." + plugin_name] = load
-            print("Tech VJ Imported => " + plugin_name)
-    if ON_HEROKU:
-        asyncio.create_task(ping_server())
+        patt = Path(name)
+        plugin_name = patt.stem
+        import_path = f"plugins.{plugin_name}"
+
+        spec = importlib.util.spec_from_file_location(import_path, name)
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        sys.modules[import_path] = module
+
+        print("✅ Loaded =>", plugin_name)
+
+    # DB banned users
     b_users, b_chats = await db.get_banned()
     temp.BANNED_USERS = b_users
     temp.BANNED_CHATS = b_chats
+
     me = await TechVJBot.get_me()
     temp.BOT = TechVJBot
     temp.ME = me.id
     temp.U_NAME = me.username
     temp.B_NAME = me.first_name
-    logging.info(script.LOGO)
+
+    logging.info("🤖 Bot Started Successfully")
+
+    # Restart log
     tz = pytz.timezone('Asia/Kolkata')
-    today = date.today()
     now = datetime.now(tz)
-    time = now.strftime("%H:%M:%S %p")
+    today = date.today()
+
     try:
-        await TechVJBot.send_message(chat_id=LOG_CHANNEL, text=script.RESTART_TXT.format(today, time))
+        await TechVJBot.send_message(
+            chat_id=LOG_CHANNEL,
+            text=f"✅ Bot Restarted\n📅 {today}\n⏰ {now.strftime('%H:%M:%S')}"
+        )
     except:
-        print("Make Your Bot Admin In Log Channel With Full Rights")
-    for ch in CHANNELS:
-        try:
-            k = await TechVJBot.send_message(chat_id=ch, text="**Bot Restarted**")
-            await k.delete()
-        except:
-            print("Make Your Bot Admin In File Channels With Full Rights")
-    try:
-        k = await TechVJBot.send_message(chat_id=AUTH_CHANNEL, text="**Bot Restarted**")
-        await k.delete()
-    except:
-        print("Make Your Bot Admin In Force Subscribe Channel With Full Rights")
-    if CLONE_MODE == True:
-        print("Restarting All Clone Bots.......")
-        await restart_bots()
-        print("Restarted All Clone Bots.")
+        print("⚠️ Make bot admin in log channel")
+
+    # Start web server (VERY IMPORTANT FOR RENDER)
     app = web.AppRunner(await web_server())
     await app.setup()
-    bind_address = "0.0.0.0"
-    await web.TCPSite(app, bind_address, PORT).start()
+    await web.TCPSite(app, "0.0.0.0", PORT).start()
+
+    print(f"🌐 Web server started on port {PORT}")
+
     await idle()
 
 
@@ -95,6 +96,4 @@ if __name__ == '__main__':
     try:
         loop.run_until_complete(start())
     except KeyboardInterrupt:
-        logging.info('Service Stopped Bye 👋')
-
-
+        print("❌ Bot stopped")
