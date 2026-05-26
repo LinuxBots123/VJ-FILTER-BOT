@@ -1,9 +1,15 @@
 # Don't Remove Credit @Linux_Bots
 
-import re, math, logging, secrets, mimetypes
+import re
+import math
+import logging
+import secrets
+import mimetypes
+
 from info import *
 from aiohttp import web
 from aiohttp.http_exceptions import BadStatusLine
+
 from TechVJ.bot import multi_clients, work_loads
 from TechVJ.server.exceptions import FIleNotFound, InvalidHash
 from TechVJ.util.custom_dl import ByteStreamer
@@ -11,80 +17,111 @@ from TechVJ.util.render_template import render_page
 
 routes = web.RouteTableDef()
 
-
-@routes.get("/", allow_head=True)
-async def root_route_handler(request):
-    return web.json_response("@Linux_Bots")
-
-
-# ✅ WATCH PAGE HANDLER
-@routes.get(r"/watch/{path:\S+}", allow_head=True)
-async def watch_handler(request: web.Request):
-    try:
-        path = request.match_info["path"]
-
-        match = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
-        if match:
-            secure_hash = match.group(1)
-            file_id = int(match.group(2))
-        else:
-            file_id = int(re.search(r"(\d+)", path).group(1))
-            secure_hash = request.rel_url.query.get("hash")
-
-        html = await render_page(file_id, secure_hash)
-
-        return web.Response(text=html, content_type='text/html')
-
-    except InvalidHash as e:
-        return web.Response(text=str(e), status=403)
-
-    except FIleNotFound as e:
-        return web.Response(text=str(e), status=404)
-
-    except (AttributeError, BadStatusLine, ConnectionResetError):
-        return web.Response(text="Invalid request", status=400)  # ✅ FIXED
-
-    except Exception as e:
-        logging.error(e)
-        return web.Response(text="Internal Server Error", status=500)
-
-
-# ✅ STREAM/DOWNLOAD HANDLER
-@routes.get(r"/{path:\S+}", allow_head=True)
-async def file_stream_handler(request: web.Request):
-    try:
-        path = request.match_info["path"]
-
-        match = re.search(r"^([a-zA-Z0-9_-]{6})(\d+)$", path)
-        if match:
-            secure_hash = match.group(1)
-            file_id = int(match.group(2))
-        else:
-            file_id = int(re.search(r"(\d+)", path).group(1))
-            secure_hash = request.rel_url.query.get("hash")
-
-        return await media_streamer(request, file_id, secure_hash)
-
-    except InvalidHash as e:
-        return web.Response(text=str(e), status=403)
-
-    except FIleNotFound as e:
-        return web.Response(text=str(e), status=404)
-
-    except (AttributeError, BadStatusLine, ConnectionResetError):
-        return web.Response(text="Invalid request", status=400)  # ✅ FIXED
-
-    except Exception as e:
-        logging.error(e)
-        return web.Response(text="Internal Server Error", status=500)
-
-
-# 🔥 CACHE
+# CACHE
 class_cache = {}
 
 
-async def media_streamer(request: web.Request, file_id: int, secure_hash: str):
-    range_header = request.headers.get("Range", None)
+@routes.get("/", allow_head=True)
+async def root_route_handler(request):
+    return web.Response(text="Bot Running Successfully")
+
+
+# =========================================================
+# WATCH PAGE
+# =========================================================
+
+@routes.get("/watch/{file_id}/{file_name}", allow_head=True)
+async def watch_handler(request: web.Request):
+    try:
+        file_id = int(request.match_info["file_id"])
+        secure_hash = request.rel_url.query.get("hash")
+
+        if not secure_hash:
+            return web.Response(
+                text="Missing hash parameter",
+                status=400
+            )
+
+        html = await render_page(file_id, secure_hash)
+
+        return web.Response(
+            text=html,
+            content_type='text/html'
+        )
+
+    except InvalidHash:
+        return web.Response(
+            text="Invalid hash",
+            status=403
+        )
+
+    except FIleNotFound:
+        return web.Response(
+            text="File not found",
+            status=404
+        )
+
+    except Exception as e:
+        logging.exception(e)
+        return web.Response(
+            text="Internal Server Error",
+            status=500
+        )
+
+
+# =========================================================
+# STREAM FILE
+# =========================================================
+
+@routes.get("/{file_id}/{file_name}", allow_head=True)
+async def file_stream_handler(request: web.Request):
+    try:
+        file_id = int(request.match_info["file_id"])
+        secure_hash = request.rel_url.query.get("hash")
+
+        if not secure_hash:
+            return web.Response(
+                text="Missing hash parameter",
+                status=400
+            )
+
+        return await media_streamer(
+            request,
+            file_id,
+            secure_hash
+        )
+
+    except InvalidHash:
+        return web.Response(
+            text="Invalid hash",
+            status=403
+        )
+
+    except FIleNotFound:
+        return web.Response(
+            text="File not found",
+            status=404
+        )
+
+    except Exception as e:
+        logging.exception(e)
+        return web.Response(
+            text="Internal Server Error",
+            status=500
+        )
+
+
+# =========================================================
+# MEDIA STREAMER
+# =========================================================
+
+async def media_streamer(
+    request: web.Request,
+    file_id: int,
+    secure_hash: str
+):
+
+    range_header = request.headers.get("Range")
 
     index = min(work_loads, key=work_loads.get)
     faster_client = multi_clients[index]
@@ -102,46 +139,77 @@ async def media_streamer(request: web.Request, file_id: int, secure_hash: str):
 
     file_size = file.file_size
 
+    # RANGE SUPPORT
     if range_header:
-        from_bytes, until_bytes = range_header.replace("bytes=", "").split("-")
-        from_bytes = int(from_bytes)
-        until_bytes = int(until_bytes) if until_bytes else file_size - 1
-    else:
-        from_bytes = request.http_range.start or 0
-        until_bytes = (request.http_range.stop or file_size) - 1
+        from_bytes, until_bytes = range_header.replace(
+            "bytes=", ""
+        ).split("-")
 
-    if (until_bytes > file_size) or (from_bytes < 0) or (until_bytes < from_bytes):
+        from_bytes = int(from_bytes)
+
+        until_bytes = (
+            int(until_bytes)
+            if until_bytes
+            else file_size - 1
+        )
+
+    else:
+        from_bytes = 0
+        until_bytes = file_size - 1
+
+    if (
+        from_bytes < 0
+        or until_bytes >= file_size
+        or from_bytes > until_bytes
+    ):
         return web.Response(
             status=416,
-            text="Range not satisfiable",
-            headers={"Content-Range": f"bytes */{file_size}"}
+            text="Requested Range Not Satisfiable",
+            headers={
+                "Content-Range": f"bytes */{file_size}"
+            }
         )
 
     chunk_size = 1024 * 1024
-    until_bytes = min(until_bytes, file_size - 1)
 
     offset = from_bytes - (from_bytes % chunk_size)
+
     first_part_cut = from_bytes - offset
     last_part_cut = until_bytes % chunk_size + 1
 
     req_length = until_bytes - from_bytes + 1
-    part_count = math.ceil(until_bytes / chunk_size) - math.floor(offset / chunk_size)
 
-    body = tg_connect.yield_file(
-        file, index, offset, first_part_cut, last_part_cut, part_count, chunk_size
+    part_count = (
+        math.ceil(until_bytes / chunk_size)
+        - math.floor(offset / chunk_size)
     )
 
-    mime_type = file.mime_type or "application/octet-stream"
-    file_name = file.file_name or f"{secrets.token_hex(4)}"
+    body = tg_connect.yield_file(
+        file,
+        index,
+        offset,
+        first_part_cut,
+        last_part_cut,
+        part_count,
+        chunk_size
+    )
+
+    mime_type = (
+        file.mime_type
+        or mimetypes.guess_type(file.file_name)[0]
+        or "application/octet-stream"
+    )
+
+    file_name = file.file_name or f"{secrets.token_hex(5)}"
 
     return web.Response(
         status=206 if range_header else 200,
         body=body,
         headers={
             "Content-Type": mime_type,
-            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
-            "Content-Length": str(req_length),
-            "Content-Disposition": f'attachment; filename="{file_name}"',
             "Accept-Ranges": "bytes",
-        },
+            "Content-Length": str(req_length),
+            "Content-Range": f"bytes {from_bytes}-{until_bytes}/{file_size}",
+            "Content-Disposition": f'inline; filename="{file_name}"'
+        }
     )
