@@ -49,12 +49,6 @@ async def web_server():
 
     app = web.Application()
 
-    async def home(request):
-        return web.Response(text="Bot is running ✅")
-
-    # Home page
-    app.router.add_get("/", home)
-
     # Register routes from plugins/route.py
     route_module = sys.modules.get("plugins.route")
 
