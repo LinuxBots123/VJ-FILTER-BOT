@@ -1,4 +1,12 @@
-import sys, glob, importlib, logging, logging.config, pytz, asyncio, os
+import sys
+import glob
+import importlib
+import logging
+import logging.config
+import pytz
+import asyncio
+import os
+
 from pathlib import Path
 from aiohttp import web
 from pyrogram import idle
@@ -17,51 +25,94 @@ from plugins.clone import restart_bots
 from TechVJ.bot import TechVJBot
 from TechVJ.bot.clients import initialize_clients
 
-# ------------------- IMPORTANT -------------------
-PORT = int(os.environ.get("PORT", 8080))  # Render dynamic port
-# -------------------------------------------------
+# Import web routes
+from TechVJ.server.route import routes
+
+
+# ------------------- WEB SERVER PORT -------------------
+
+PORT = int(os.environ.get("PORT", 8080))
+
+# --------------------------------------------------------
+
 
 ppath = "plugins/*.py"
 files = glob.glob(ppath)
 
+
+# Start bot
 TechVJBot.start()
+
 loop = asyncio.get_event_loop()
 
+
 # ------------------- WEB SERVER -------------------
+
 async def web_server():
+
     app = web.Application()
 
     async def home(request):
         return web.Response(text="Bot is running ✅")
 
+    # Home page
     app.router.add_get("/", home)
+
+    # Register all routes from route.py
+    app.add_routes(routes)
+
     return app
-# -------------------------------------------------
+
+# ---------------------------------------------------
+
 
 async def start():
+
     print("🚀 Initializing Your Bot")
 
+    # Initialize additional clients
     await initialize_clients()
 
-    # Load plugins
+    # ------------------- LOAD PLUGINS -------------------
+
     for name in files:
+
         patt = Path(name)
+
         plugin_name = patt.stem
+
         import_path = f"plugins.{plugin_name}"
 
-        spec = importlib.util.spec_from_file_location(import_path, name)
+        spec = importlib.util.spec_from_file_location(
+            import_path,
+            name
+        )
+
         module = importlib.util.module_from_spec(spec)
+
         spec.loader.exec_module(module)
+
         sys.modules[import_path] = module
 
         print("✅ Loaded =>", plugin_name)
 
-    # DB banned users
+    # ----------------------------------------------------
+
+
+    # ------------------- DATABASE -------------------
+
     b_users, b_chats = await db.get_banned()
+
     temp.BANNED_USERS = b_users
     temp.BANNED_CHATS = b_chats
 
+    # ------------------------------------------------
+
+
+    # ------------------- BOT INFORMATION -------------------
+
     me = await TechVJBot.get_me()
+
     temp.BOT = TechVJBot
     temp.ME = me.id
     temp.U_NAME = me.username
@@ -69,31 +120,66 @@ async def start():
 
     logging.info("🤖 Bot Started Successfully")
 
-    # Restart log
-    tz = pytz.timezone('Asia/Kolkata')
+    # -------------------------------------------------------
+
+
+    # ------------------- RESTART LOG -------------------
+
+    tz = pytz.timezone("Asia/Kolkata")
+
     now = datetime.now(tz)
+
     today = date.today()
 
     try:
+
         await TechVJBot.send_message(
             chat_id=LOG_CHANNEL,
-            text=f"✅ Bot Restarted\n📅 {today}\n⏰ {now.strftime('%H:%M:%S')}"
+            text=(
+                f"✅ Bot Restarted\n"
+                f"📅 {today}\n"
+                f"⏰ {now.strftime('%H:%M:%S')}"
+            )
         )
-    except:
+
+    except Exception:
+
         print("⚠️ Make bot admin in log channel")
 
-    # Start web server (VERY IMPORTANT FOR RENDER)
+    # --------------------------------------------------
+
+
+    # ------------------- START WEB SERVER -------------------
+
     app = web.AppRunner(await web_server())
+
     await app.setup()
-    await web.TCPSite(app, "0.0.0.0", PORT).start()
+
+    site = web.TCPSite(
+        app,
+        "0.0.0.0",
+        PORT
+    )
+
+    await site.start()
 
     print(f"🌐 Web server started on port {PORT}")
 
+    # -------------------------------------------------------
+
+
+    # Keep bot running
     await idle()
 
 
-if __name__ == '__main__':
+# ------------------- MAIN -------------------
+
+if __name__ == "__main__":
+
     try:
+
         loop.run_until_complete(start())
+
     except KeyboardInterrupt:
+
         print("❌ Bot stopped")
