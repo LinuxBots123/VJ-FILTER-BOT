@@ -24,7 +24,7 @@ class_cache = {}
 # ROOT
 # =========================================================
 
-@routes.get("/", allow_head=True)
+@routes.get("/")
 async def root_route_handler(request):
     return web.Response(
         text="Bot Running Successfully"
