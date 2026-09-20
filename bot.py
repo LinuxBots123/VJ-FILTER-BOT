@@ -25,9 +25,6 @@ from plugins.clone import restart_bots
 from TechVJ.bot import TechVJBot
 from TechVJ.bot.clients import initialize_clients
 
-# Import web routes
-from TechVJ.server.route import routes
-
 
 # ------------------- WEB SERVER PORT -------------------
 
@@ -58,8 +55,14 @@ async def web_server():
     # Home page
     app.router.add_get("/", home)
 
-    # Register all routes from route.py
-    app.add_routes(routes)
+    # Register routes from plugins/route.py
+    route_module = sys.modules.get("plugins.route")
+
+    if route_module and hasattr(route_module, "routes"):
+        app.add_routes(route_module.routes)
+        print("✅ Web routes registered")
+    else:
+        print("❌ Web routes NOT found")
 
     return app
 
@@ -70,7 +73,6 @@ async def start():
 
     print("🚀 Initializing Your Bot")
 
-    # Initialize additional clients
     await initialize_clients()
 
     # ------------------- LOAD PLUGINS -------------------
