@@ -28,7 +28,7 @@ from TechVJ.bot.clients import initialize_clients
 
 # ------------------- WEB SERVER PORT -------------------
 
-PORT = int(os.environ.get("PORT", 8080))
+PORT = int(os.environ.get("PORT", 8000))
 
 # --------------------------------------------------------
 
